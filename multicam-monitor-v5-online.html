@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Multicam Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0908; --plate:#141110; --text:#f4f1ed; --dim:#a8a099; --hair:rgba(244,241,237,.16);
+  --accent:#ec7752; --blue:#b8d2ee; --greige:#aaa29a; --rec:#ff4a36; --ok:#32d74b;
+  --glass:rgba(40,33,30,.5); --glass-b:rgba(244,241,237,.14);
+  --serif:"Instrument Serif","Feature Deck",Georgia,"Times New Roman",serif;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);background-image:radial-gradient(60% 50% at 12% 0%,rgba(236,119,82,.16),transparent 70%),radial-gradient(50% 45% at 100% 100%,rgba(184,210,238,.10),transparent 70%);background-attachment:fixed;color:var(--text);font:14px/1.3 var(--font);
+  overscroll-behavior:none;font-variant-numeric:tabular-nums}
+body{display:flex;flex-direction:column;user-select:none;-webkit-user-select:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+.glass{background:var(--glass);border:1px solid var(--glass-b);
+  -webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(0,0,0,.25),0 8px 28px rgba(0,0,0,.35)}
+
+/* Kopfzeile */
+header{display:flex;align-items:center;gap:8px;padding:10px 14px}
+header h1{font:400 26px/1 var(--serif);letter-spacing:-.01em;margin:0 auto 0 2px;color:var(--text)}
+.pill{height:36px;padding:0 14px;border-radius:18px;font-weight:500;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.pill.solid{background:var(--accent);color:#1a0f0b}
+#banner{display:none;margin:0 14px 8px;padding:9px 14px;border-radius:14px;color:#ffd9a8;font-size:13px}
+
+/* Raster */
+#grid{flex:1;min-height:0;display:grid;gap:6px;padding:0 6px 6px;grid-auto-rows:1fr}
+#empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;color:var(--dim)}
+#empty p{max-width:440px;margin:0}
+.tile{position:relative;background:#000;border-radius:18px;overflow:hidden;min-height:0;min-width:0;display:flex;flex-direction:column;
+  box-shadow:0 0 0 1px rgba(255,255,255,.07)}
+.tile.rec{box-shadow:0 0 0 2px var(--rec)}
+.view{position:relative;flex:1;min-height:0;touch-action:none;cursor:pointer}
+.view canvas,.view video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+.chips{position:absolute;top:8px;display:flex;gap:6px;align-items:center;pointer-events:none;z-index:2}
+.chips.l{left:8px}.chips.r{right:8px}
+.chip{height:26px;padding:0 10px;border-radius:13px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;white-space:nowrap}
+.chip:empty{display:none}
+.chip.time{display:none;color:#fff;background:rgba(255,69,58,.85);border-color:transparent}
+.tile.rec .chip.time{display:inline-flex}
+.chip.time::before{content:"";width:7px;height:7px;border-radius:50%;background:#fff}
+.back{pointer-events:auto;width:34px;height:34px;border-radius:17px;display:none;align-items:center;justify-content:center;font-size:20px}
+.bat{display:inline-block;width:20px;height:10px;border:1.2px solid currentColor;border-radius:3px;position:relative;opacity:.9}
+.bat::after{content:"";position:absolute;right:-3.5px;top:2.5px;width:2px;height:3.5px;background:currentColor;border-radius:0 1px 1px 0}
+.bat i{display:block;height:100%;background:currentColor;border-radius:1px}
+.low{color:var(--rec)}
+.msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:16px;
+  background:rgba(0,0,0,.72);color:#ffd9a8;font-size:13px;white-space:pre-line;pointer-events:none;z-index:3}
+.msg.on{display:flex}
+.toast{position:absolute;left:50%;top:44px;transform:translateX(-50%);padding:5px 12px;border-radius:14px;font-size:12px;opacity:0;
+  transition:opacity .2s;pointer-events:none;white-space:nowrap;z-index:4;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+.toast.on{opacity:1}
+.reticle{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border:1.5px solid var(--accent);border-radius:8px;pointer-events:none;opacity:0}
+.reticle.on{animation:ret .9s ease-out forwards}
+@keyframes ret{0%{opacity:1;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
+
+/* Mini Leiste im Raster */
+.mini{position:absolute;left:8px;right:8px;bottom:8px;display:flex;align-items:center;gap:8px;z-index:2;pointer-events:none}
+.mini .vals{flex:1;min-width:0;height:34px;border-radius:17px;padding:0 14px;display:flex;align-items:center;gap:12px;font-size:12px;font-weight:500;overflow:hidden;white-space:nowrap}
+.mini .vals span{color:var(--dim);font-weight:400;margin-right:4px;font-size:10px;letter-spacing:.06em}
+.recbtn{pointer-events:auto;flex:none;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25)}
+.recbtn i{display:block;background:var(--rec);border-radius:50%;transition:all .18s}
+.rec .recbtn i,.recbtn.on i{border-radius:22%;transform:scale(.55)}
+.recbtn.busy{opacity:.5}
+.mini .recbtn{width:40px;height:40px}.mini .recbtn i{width:28px;height:28px}
+
+/* Einzelansicht */
+.tile.solo{position:fixed;inset:0;z-index:20;border-radius:0;box-shadow:none;background:#000}
+.tile.solo.rec .view{box-shadow:inset 0 0 0 2px var(--rec)}
+.tile.solo .view{cursor:crosshair}
+.tile.solo .mini{display:none}
+.tile.solo .back{display:flex}
+.tile.solo .chips{top:12px}.tile.solo .chips.l{left:12px}.tile.solo .chips.r{right:12px}
+.tile.solo .chip{height:30px;font-size:13px}
+.tile:not(.solo) .fmt,.tile:not(.solo) .plate,.tile:not(.solo) .panel{display:none}
+.plate{flex:none;background:linear-gradient(90deg,rgba(236,119,82,.10),transparent 35%,transparent 65%,rgba(184,210,238,.08)),var(--plate);border-top:1px solid rgba(255,255,255,.06);padding:10px 14px calc(12px + env(safe-area-inset-bottom));
+  display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.cells{display:flex;gap:2px;flex:1 1 0;min-width:0}
+.cells.l{justify-content:flex-end}.cells.r{justify-content:flex-start}
+.cell{flex:0 1 96px;min-width:58px;padding:6px 8px 4px;border-radius:12px;text-align:left}
+.cell b{display:block;font:400 24px/1.1 var(--serif);letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:5px;border-bottom:1px solid var(--hair)}
+.cell small{display:block;font-size:10px;letter-spacing:.1em;color:var(--dim);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell.off b{color:#5c5c61}
+.cell.act{background:rgba(255,255,255,.06)}
+.cell.act b{border-bottom-color:var(--accent);color:var(--accent)}
+.center{display:flex;align-items:center;gap:14px;padding:0 18px;flex:none}
+.center .recbtn{width:68px;height:68px;border-width:3px}.center .recbtn i{width:52px;height:52px}
+.markbtn{width:44px;height:44px;border-radius:50%;background:#241e1b;color:var(--text);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1)}
+.markbtn svg{width:18px;height:18px}
+.markbtn.flash{background:var(--rec)}
+.spacer44{width:44px}
+@media (max-width:980px){.cell{padding:6px 6px 4px;min-width:50px}.cell b{font-size:19px}.center{padding:0 10px}}
+@media (max-width:760px){
+  .plate{gap:10px}
+  .cells{flex:1 1 100%;justify-content:center!important;overflow-x:auto}
+  .center{order:3}
+  .cell{flex:1 1 0;min-width:54px;padding:6px 6px 4px}.cell b{font-size:19px}
+}
+/* Einstell Panel */
+.panel{position:absolute;left:12px;right:12px;bottom:12px;border-radius:26px;padding:14px 16px 16px;z-index:5;display:none}
+.panel.on{display:block}
+.panel h4{margin:0 0 10px;font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);display:flex;justify-content:space-between;align-items:center}
+.panel h4 button{color:var(--dim);font-size:18px;width:28px;height:28px}
+.presets{display:flex;gap:0;overflow-x:auto}
+.presets button{flex:1 1 0;min-width:74px;padding:8px 6px;font:400 30px/1.1 var(--serif);white-space:nowrap;border-left:1px solid var(--hair)}
+.presets button:first-child{border-left:0}
+.presets button.cur{color:var(--accent)}
+.presets.small button{font:400 20px/1.1 var(--serif);padding:10px 8px}
+.fine{display:flex;align-items:center;gap:14px;margin-top:10px;padding-top:12px;border-top:1px solid var(--hair)}
+.fine .step{font-size:30px;font-weight:200;width:40px;height:40px;line-height:1}
+.fine .val{font:400 32px/1 var(--serif);min-width:96px;text-align:center}
+.fine input[type=range]{flex:1;min-width:60px;-webkit-appearance:none;appearance:none;height:28px;background:none}
+.fine input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:rgba(255,255,255,.25)}
+.fine input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:44px;height:26px;border-radius:13px;background:var(--text);margin-top:-11.5px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.fine input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:rgba(255,255,255,.25)}
+.fine input[type=range]::-moz-range-thumb{width:44px;height:26px;border-radius:13px;background:var(--text);border:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.row .lab{font-size:11px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin-right:4px}
+.seg{height:36px;padding:0 14px;border-radius:18px;background:rgba(255,255,255,.08);font-size:13px;font-weight:500}
+.seg.cur{background:var(--blue);color:#10161d}
+.panel p{margin:8px 0 0;font-size:12px;color:var(--dim);line-height:1.45;user-select:text;-webkit-user-select:text}
+
+/* Nur Ansicht (Mac Kamera) */
+.tile.viewonly .plate,.tile.viewonly .mini{display:none}
+.rm{pointer-events:auto;cursor:pointer}
+/* Audio Kachel */
+.tile.audio{background:linear-gradient(160deg,#1b1614,#0f0d0c 60%);padding:12px;gap:10px;--mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+.awave{flex:none;width:100%;height:56px;border-radius:14px;background:#090807;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.abody{flex:1;min-height:0;display:flex;gap:10px}
+.adisp{flex:0 0 38%;min-width:150px;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;
+  background:linear-gradient(180deg,#151211 0%,#1d2426 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),inset 0 1px 0 rgba(255,255,255,.2)}
+.ast{display:flex;align-items:center;gap:8px;font:500 12px var(--mono);letter-spacing:.08em}
+.ast i{width:10px;height:10px;border-radius:50%;background:#4a4440}
+.audio.rec .ast i{background:var(--rec);box-shadow:0 0 10px var(--rec)}
+.afile{font:400 11px var(--mono);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+.atime{font:300 clamp(26px,4.2vw,46px)/1 var(--mono);letter-spacing:-.02em}
+.ainfo{font:400 10px var(--mono);color:var(--dim);letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.astrips{flex:1;min-width:0;display:flex;gap:8px;overflow-x:auto;border-radius:16px;background:#090807;padding:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.astrips:empty::before{content:"Noch kein Eingang. Mit «+ Eingang» ein Mikrofon wählen.";color:var(--dim);font-size:12px;margin:auto;text-align:center}
+.strip{flex:0 0 76px;display:flex;flex-direction:column;align-items:center;gap:6px;min-height:0}
+.strip canvas{flex:1;min-height:0;width:54px}
+.strip small{font:400 10px var(--mono);color:var(--dim);max-width:76px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip button{font-size:11px;color:var(--dim);height:18px}
+.abtn{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 6px;font:500 10px var(--mono);letter-spacing:.1em;color:var(--dim)}
+.arec{width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 50% 35%,#2a2321,#0c0a09);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 6px 16px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+.arec i{width:22px;height:22px;border-radius:50%;background:var(--rec);transition:all .18s}
+.audio.rec .arec{background:radial-gradient(circle at 50% 40%,#5a1a12,#1a0806);box-shadow:inset 0 0 0 1px rgba(255,90,70,.5),0 0 22px rgba(255,74,54,.45)}
+.audio.rec .arec i{border-radius:5px;background:#fff}
+.afoot{flex:none;display:flex;gap:8px;align-items:center}
+.afoot .seg{height:32px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.afoot .sp{flex:1}
+#devs .seg{display:block;width:100%;margin-top:8px;text-align:left;height:44px;border-radius:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Zuschauer */
+body.watch header .pill,body.watch #recAll{display:none!important}
+body.watch .tile .mini .recbtn{display:none}
+#share .qr{background:#f4f1ed;border-radius:16px;padding:10px;width:220px;height:220px;margin:12px auto;display:flex;align-items:center;justify-content:center;color:#333;font-size:12px;text-align:center}
+#share .qr svg{width:100%;height:100%}
+#share input{width:100%;height:40px;border-radius:12px;border:1px solid var(--hair);background:#000;color:var(--text);padding:0 12px;font:13px ui-monospace,Menlo,monospace;user-select:text;-webkit-user-select:text}
+#share p{margin:8px 0;color:#d0d0d4;font-size:13px;line-height:1.45}
+#shareState{color:var(--blue)!important}
+/* Alle aufnehmen */
+#recAll{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10;height:64px;padding:0 22px 0 8px;border-radius:32px;
+  display:none;align-items:center;gap:12px;font-size:13px;font-weight:500;letter-spacing:.06em}
+#recAll .recbtn{width:48px;height:48px}#recAll .recbtn i{width:34px;height:34px}
+
+dialog{background:#171311;color:var(--text);border:1px solid var(--glass-b);border-radius:22px;max-width:560px;width:calc(100% - 24px);padding:20px 22px;
+  user-select:text;-webkit-user-select:text}
+dialog::backdrop{background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+dialog h2{margin:0 0 10px;font:400 28px/1.1 var(--serif)}
+dialog h3{margin:14px 0 4px;font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-weight:500}
+dialog ul,dialog ol{margin:4px 0;padding-left:20px;color:#d0d0d4}
+dialog li{margin:4px 0}
+dialog .close{float:right;color:var(--dim)}
+#menu .seg{display:block;width:100%;margin-top:8px;text-align:left;height:44px;border-radius:14px}
+#diagText{width:100%;height:46vh;background:#000;color:#b8f5c4;border:1px solid var(--hair);border-radius:12px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:10px;resize:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Multicam Monitor</h1>
+  <button id="btnAdd" class="pill solid">+ Kamera</button>
+  <button id="btnCam" class="pill glass">+ Mac Kamera</button>
+  <button id="btnAudio" class="pill glass">+ Audio</button>
+  <button id="btnShare" class="pill glass">Zuschauer</button>
+  <button id="btnDemo" class="pill glass">Demo</button>
+  <button id="btnMenu" class="pill glass">⋯</button>
+</header>
+<div id="banner" class="glass"></div>
+<div id="empty">
+  <p style="font:400 34px/1.1 var(--serif);color:var(--text)">Noch keine Kamera verbunden</p>
+  <p>Kamera per USB anschliessen, USB Modus auf PC-Fernbedienung stellen und «+ Kamera» wählen. Für jede Kamera einmal wiederholen. Mit «Demo» kannst du die Oberfläche ohne Kamera ausprobieren.</p>
+</div>
+<div id="grid" hidden></div>
+<button id="recAll" class="glass"><span class="recbtn"><i></i></span><span id="recAllText">ALLE AUFNEHMEN</span></button>
+
+<dialog id="share">
+  <button class="close" onclick="this.closest('dialog').close()">Schliessen</button>
+  <h2>Zuschauer</h2>
+  <p id="shareState">Wird gestartet …</p>
+  <div class="qr" id="shareQr"></div>
+  <input id="shareLink" readonly>
+  <div class="row"><button class="seg" id="shareCopy">Link kopieren</button><button class="seg" id="shareStop">Freigabe beenden</button></div>
+  <div id="shareBaseBox" hidden>
+    <h3>Adresse der App</h3>
+    <p>Du hast die App als lokale Datei geöffnet. Das Handy braucht eine Adresse im Internet, unter der dieselbe Datei liegt. Trage sie hier einmal ein.</p>
+    <input id="shareBase" placeholder="https://…/multicam-monitor.html">
+  </div>
+  <p>Wer den Link hat, kann zuschauen (nur Bild, keine Steuerung). Der Link bleibt gleich, bis du «Neuer Link» wählst.</p>
+  <div class="row"><button class="seg" id="shareNew">Neuer Link</button></div>
+</dialog>
+<dialog id="devs">
+  <button class="close" onclick="this.closest('dialog').close()">Schliessen</button>
+  <h2 id="devsTitle"></h2>
+  <div id="devsList"></div>
+</dialog>
+<dialog id="menu">
+  <button class="close" onclick="this.closest('dialog').close()">Schliessen</button>
+  <h2>Menü</h2>
+  <button class="seg" id="mFull">Vollbild ein/aus</button>
+  <button class="seg" id="mHelp">Einrichtung und Bedienung</button>
+  <button class="seg" id="mDiag">Diagnose (für Fehlersuche)</button>
+</dialog>
+<dialog id="diag">
+  <button class="close" onclick="this.closest('dialog').close()">Schliessen</button>
+  <h2>Diagnose</h2>
+  <textarea id="diagText" readonly></textarea>
+  <div class="row"><button class="seg" id="diagCopy">Text kopieren</button></div>
+</dialog>
+<dialog id="help">
+  <button class="close" onclick="this.closest('dialog').close()">Schliessen</button>
+  <h2>Einrichtung</h2>
+  <h3>Kamera</h3>
+  <ol>
+    <li>USB Verbindungsmodus: <b>PC-Fernbedienung</b> (PC Remote).</li>
+    <li><b>Filmmodus</b> wählen, Touch Bedienung <b>Ein</b>.</li>
+    <li>Monitor &amp; Control und Imaging Edge schliessen, sie blockieren die Kamera.</li>
+  </ol>
+  <h3>Multiview</h3>
+  <ul>
+    <li>Tippen auf ein Bild öffnet die Einzelansicht.</li>
+    <li>Der runde Knopf im Bild startet/stoppt diese Kamera, «Alle aufnehmen» alle zusammen.</li>
+  </ul>
+  <h3>Einzelansicht</h3>
+  <ul>
+    <li>Tippen aufs Bild setzt den Fokus. Rahmen wie auf der Kamera: Ecken = Fokusfeld, feines Rechteck = Gesicht/Auge, grün = scharf.</li>
+    <li>Werte unten antippen: oben die gängigen Werte, darunter Feineinstellung mit Pfeilen und Regler.</li>
+    <li>Knopf rechts neben REC: Tracking deaktivieren.</li>
+    <li>FOKUS: AF/MF, manuell Nah/Fern, Tracking aufheben. FELD: Fokusfeld. ZEBRA: ein/aus und Pegel.</li>
+    <li>Marker: drückt per Fernsteuerung eine Custom Taste der Kamera. Weise dieser Taste in der Kamera «Shot Mark 1 hinzufügen» zu. Marker Knopf lange halten, um die Taste zu wählen.</li>
+  </ul>
+  <h3>Mac Kamera und Audio</h3>
+  <ul>
+    <li>«Zuschauer» gibt alle Bilder für ein Handy oder Tablet frei: QR Code scannen oder Link öffnen. Dort gibt es Multiview und Einzelansicht, nur zum Zuschauen.</li>
+    <li>«+ Mac Kamera» zeigt FaceTime Kamera, iPhone (Integrationskamera) oder eine USB Webcam als zusätzliches Bild. Nur Ansicht, ohne Steuerung.</li>
+    <li>«+ Audio» fügt ein Mikrofon hinzu (Mac, USB, Klinke/Line-In, iPhone). Mehrere Eingänge gleichzeitig möglich.</li>
+    <li>Aufnahme: pro Eingang eine WAV Datei, 32 Bit Float, in der Abtastrate des Geräts, ohne Filter. «Alle aufnehmen» startet Audio mit.</li>
+    <li>«Zielordner» wählen, dann wird direkt auf die Platte geschrieben. Ohne Ordner landet die Datei beim Stoppen im Download Ordner.</li>
+  </ul>
+  <h3>Rechner</h3>
+  <ul>
+    <li>Chrome oder Edge. Windows braucht pro Kamera den WinUSB Treiber (Zadig). Android, Linux, ChromeOS und macOS ohne Treiber.</li>
+  </ul>
+</dialog>
+
+<script>
+'use strict';
+/* ============================================================
+   Sony PTP (PC Remote) über WebUSB, gemäss Sony "Camera Remote Command" Referenz (PTP 3)
+   ============================================================ */
+const SONY_VID = 0x054c, OK = 0x2001;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const hex = n => '0x' + n.toString(16).toUpperCase().padStart(4, '0');
+const store = { get(k, d) { try { const v = localStorage.getItem('mcm.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+                set(k, v) { try { localStorage.setItem('mcm.' + k, JSON.stringify(v)); } catch {} } };
+const DIAG = [];
+const diag = (who, msg) => { DIAG.push(new Date().toTimeString().slice(0, 8) + ' ' + who + ': ' + msg); if (DIAG.length > 400) DIAG.shift(); };
+
+class PtpUsb {
+  constructor(dev) { this.dev = dev; this.tid = 0; this.rx = new Uint8Array(0); this.lock = Promise.resolve(); this.broken = false; }
+  async open() {
+    const d = this.dev;
+    if (!d.opened) await d.open();
+    if (!d.configuration) await d.selectConfiguration(1);
+    let hit = null;
+    for (const itf of d.configuration.interfaces) for (const alt of itf.alternates) if (!hit && alt.interfaceClass === 6) hit = { itf, alt };
+    if (!hit) { const e = new Error('no-ptp'); e.kind = 'no-ptp'; throw e; }
+    this.ifnum = hit.itf.interfaceNumber;
+    try { await d.claimInterface(this.ifnum); } catch (err) { const e = new Error('claim'); e.kind = 'claim'; e.cause = err; throw e; }
+    for (const ep of hit.alt.endpoints) {
+      if (ep.type !== 'bulk') continue;
+      if (ep.direction === 'in') { this.epIn = ep.endpointNumber; this.chunk = ep.packetSize * 2048; } else this.epOut = ep.endpointNumber;
+    }
+    if (this.epIn == null || this.epOut == null) throw new Error('Keine Bulk Endpunkte gefunden');
+    try { await d.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x66, value: 0, index: this.ifnum }); } catch {}
+    this.tid = 0; this.rx = new Uint8Array(0); this.broken = false;
+  }
+  async close() { try { await this.dev.close(); } catch {} }
+  tx(op, params = [], dataOut = null, timeout = 5000) {
+    const job = this.lock.then(() => {
+      if (this.broken) throw new Error('Verbindung unterbrochen');
+      let timer;
+      const guard = new Promise((_, rej) => { timer = setTimeout(() => { this.broken = true; rej(new Error('Zeitüberschreitung bei ' + hex(op))); }, timeout); });
+      return Promise.race([this._tx(op, params, dataOut), guard]).finally(() => clearTimeout(timer));
+    });
+    this.lock = job.catch(() => {});
+    return job;
+  }
+  _container(type, op, tid, payload) {
+    const buf = new Uint8Array(12 + payload.length), v = new DataView(buf.buffer);
+    v.setUint32(0, buf.length, true); v.setUint16(4, type, true); v.setUint16(6, op, true); v.setUint32(8, tid, true);
+    buf.set(payload, 12); return buf;
+  }
+  async _tx(op, params, dataOut) {
+    const tid = this.tid++;
+    const pb = new Uint8Array(params.length * 4), pv = new DataView(pb.buffer);
+    params.forEach((p, i) => pv.setUint32(i * 4, p >>> 0, true));
+    await this._out(this._container(1, op, tid, pb));
+    if (dataOut) await this._out(this._container(2, op, tid, dataOut));
+    let data = null;
+    for (;;) {
+      const c = await this._readContainer();
+      if (c.type === 2) { data = c.payload; continue; }
+      if (c.type === 3) {
+        const v = new DataView(c.payload.buffer, c.payload.byteOffset, c.payload.byteLength), out = [];
+        for (let i = 0; i + 4 <= c.payload.length; i += 4) out.push(v.getUint32(i, true));
+        return { code: c.code, params: out, data };
+      }
+    }
+  }
+  async _out(buf) {
+    const r = await this.dev.transferOut(this.epOut, buf);
+    if (r.status !== 'ok') { try { await this.dev.clearHalt('out', this.epOut); } catch {} throw new Error('USB Schreibfehler'); }
+  }
+  async _fill(n) {
+    while (this.rx.length < n) {
+      const r = await this.dev.transferIn(this.epIn, this.chunk);
+      if (r.status === 'stall') { try { await this.dev.clearHalt('in', this.epIn); } catch {} throw new Error('USB Lesefehler'); }
+      if (!r.data || !r.data.byteLength) continue;
+      const add = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+      if (!this.rx.length) this.rx = add;
+      else { const m = new Uint8Array(this.rx.length + add.length); m.set(this.rx); m.set(add, this.rx.length); this.rx = m; }
+    }
+  }
+  async _readContainer() {
+    await this._fill(12);
+    let v = new DataView(this.rx.buffer, this.rx.byteOffset, this.rx.byteLength);
+    const len = v.getUint32(0, true);
+    if (len < 12 || len > 64 * 1024 * 1024) { this.broken = true; throw new Error('Ungültige Antwort der Kamera'); }
+    await this._fill(len);
+    v = new DataView(this.rx.buffer, this.rx.byteOffset, this.rx.byteLength);
+    const c = { type: v.getUint16(4, true), code: v.getUint16(6, true), payload: this.rx.subarray(12, len) };
+    this.rx = this.rx.subarray(len);
+    return c;
+  }
+}
+
+function parseProps(data, version) {
+  const props = new Map();
+  const v = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let o = 8;
+  const SIZE = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 4, 6: 4, 7: 8, 8: 8, 9: 16, 10: 16 };
+  const val = t => {
+    if (t === 0xFFFF) { const n = v.getUint8(o); o += 1 + n * 2; return null; }
+    if (t & 0x4000) { const n = v.getUint32(o, true); o += 4 + n * (SIZE[t & 0xF] || 1); return null; }
+    const s = SIZE[t]; if (!s) throw new Error('Datentyp ' + t);
+    let r = null;
+    switch (t) {
+      case 1: r = v.getInt8(o); break; case 2: r = v.getUint8(o); break;
+      case 3: r = v.getInt16(o, true); break; case 4: r = v.getUint16(o, true); break;
+      case 5: r = v.getInt32(o, true); break; case 6: r = v.getUint32(o, true); break;
+      case 7: case 8: r = Number(v.getBigUint64(o, true)); break;
+    }
+    o += s; return r;
+  };
+  try {
+    while (o + 6 <= data.length) {
+      const code = v.getUint16(o, true), type = v.getUint16(o + 2, true);
+      const writable = v.getUint8(o + 4), enabled = v.getUint8(o + 5); o += 6;
+      val(type); const cur = val(type);
+      const form = v.getUint8(o); o += 1;
+      let values = [], range = null;
+      if (form === 1) range = { min: val(type), max: val(type), step: val(type) };
+      else if (form === 2) {
+        let n = v.getUint16(o, true); o += 2;
+        for (let i = 0; i < n; i++) values.push(val(type));
+        if (version >= 0x12C) { n = v.getUint16(o, true); o += 2; const b = []; for (let i = 0; i < n; i++) b.push(val(type)); if (!values.length) values = b; }
+      }
+      props.set(code, { code, type, writable, enabled, cur, values, range });
+    }
+  } catch { /* was bis hier gelesen wurde, ist gültig */ }
+  return props;
+}
+
+/* Rahmen aus dem Liveview (FocalFrameInfo): Fokus, Gesicht, Tracking */
+function parseFrames(m) {
+  const out = [];
+  try {
+    const v = new DataView(m.buffer, m.byteOffset, m.byteLength);
+    const ver = v.getUint16(0, true);
+    if (ver < 100 || m.length < 56) return out;
+    let o = 48;
+    o += 8 + v.getUint16(o, true) * 24;
+    const block = kind => {
+      if (o + 16 > m.length) return;
+      const xd = v.getUint32(o, true), yd = v.getUint32(o + 4, true), n = v.getUint16(o + 8, true); o += 16;
+      for (let i = 0; i < n && o + 24 <= m.length && i < 64; i++, o += 24) {
+        if (!xd || !yd) continue;
+        out.push({ kind, type: v.getUint16(o, true), state: v.getUint16(o + 2, true),
+          x: v.getUint32(o + 8, true) / xd, y: v.getUint32(o + 12, true) / yd, h: v.getUint32(o + 16, true) / yd, w: v.getUint32(o + 20, true) / xd });
+      }
+    };
+    block('focus');
+    if (ver > 100) { block('face'); block('track'); }
+  } catch {}
+  return out;
+}
+
+const enc = (type, n) => {
+  const s = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 4, 6: 4 }[type] || 2, b = new Uint8Array(s), v = new DataView(b.buffer);
+  if (s === 1) v.setUint8(0, n & 0xFF); else if (s === 2) v.setUint16(0, n & 0xFFFF, true); else v.setUint32(0, n >>> 0, true);
+  return b;
+};
+const u16 = n => enc(4, n), u32 = n => enc(6, n);
+const i16 = n => { const b = new Uint8Array(2); new DataView(b.buffer).setInt16(0, n, true); return b; };
+
+const P = { WB: 0x5005, FNUM: 0x5007, FOCUS_MODE: 0x500A, SH_ANGLE: 0xD00E, SH_MODE: 0xD010, BASE_ISO: 0xD020, EI: 0xD022, ISO_CUR: 0xD023,
+  BUTTONS: 0xD208, SHUTTER: 0xD20D, BATT_IND: 0xD20E, KELVIN: 0xD20F, BATT: 0xD218, REC_STATE: 0xD21D, ISO: 0xD21E, FOCUS_AREA: 0xD22C,
+  FILE_FMT: 0xD241, SLOT1_T: 0xD24A, SLOT2_T: 0xD258, TOUCH_OK: 0xD284, CANCEL_OK: 0xD285, REC_FPS: 0xD286, MOVIE_MODE: 0xE000 };
+const C = { S1: 0xD2C1, REC: 0xD2C8, NEAR_FAR: 0xD2D1, AF_POS: 0xD2DC, TOUCH: 0xD2E4, TOUCH_CANCEL: 0xD2E5, BUTTON: 0xD309, LV_ENABLE: 0xD313, REC_TOGGLE: 0xF001 };
+const BTN_MOVIE = 0x1A;
+const BTN_NAME = { 0x10: 'Fn', 0x14: 'C1', 0x15: 'C2', 0x16: 'C3', 0x17: 'C4', 0x18: 'C5', 0x19: 'C6', 0x21: 'C7', 0x1B: 'AEL', 0x1C: 'AF-ON' };
+
+class SonyCamera {
+  constructor(dev) {
+    this.dev = dev; this.ptp = new PtpUsb(dev);
+    this.name = (dev.productName || 'Sony Kamera').trim();
+    this.props = new Map(); this.version = 0; this.touchMode = 'auto'; this.denied = 0; this.ext = true;
+    this.recMethod = store.get('recm.' + this.name, null);
+    this.markBtn = store.get('mark.' + this.name, null);
+  }
+  get key() { return this.dev.serialNumber || this.name; }
+  log(m) { diag(this.name, m); }
+
+  async connect() {
+    const p = this.ptp;
+    await p.open();
+    let r = await p.tx(0x1002, [1]);
+    if (r.code === 0x201E) { await p.tx(0x1003); p.tid = 0; r = await p.tx(0x1002, [1]); }
+    if (r.code !== OK && r.code !== 0x201E) throw new Error('OpenSession ' + hex(r.code));
+    await p.tx(0x9201, [1, 0, 0]);
+    await p.tx(0x9201, [2, 0, 0]);
+    this.version = 0;
+    for (const want of [0x12C, 0xC8]) {
+      for (let i = 0; i < 30 && !this.version; i++) {
+        r = await p.tx(0x9202, [want]);
+        if (r.code !== OK) break;
+        if (r.data && r.data.length >= 2 && (r.data[0] | r.data[1] << 8) === want) this.version = want; else await sleep(50);
+      }
+      if (this.version) break;
+    }
+    if (!this.version) { const e = new Error('handshake'); e.kind = 'handshake'; throw e; }
+    await p.tx(0x9201, [3, 0, 0]);
+    await sleep(200);
+    this.ext = this.version >= 0x12C;
+    await this.refreshProps();
+    this.log('verbunden, Protokoll ' + hex(this.version) + ', erweitert=' + this.ext + ', ' + this.props.size + ' Properties, Tasten=[' + this.buttons.map(hex).join(',') + ']');
+  }
+  async close() { try { await this.ptp.tx(0x1003, [], null, 800); } catch {} await this.ptp.close(); }
+
+  async refreshProps() {
+    if (this.ext) {
+      const r = await this.ptp.tx(0x9209, [0, 1]);
+      if (r.code === OK && r.data) { const m = parseProps(r.data, this.version); if (m.has(P.FOCUS_MODE) || m.size > 20) { this.props = m; return; } }
+      this.ext = false;
+    }
+    const r = await this.ptp.tx(0x9209);
+    if (r.code === OK && r.data) this.props = parseProps(r.data, this.version);
+  }
+  prop(code) { const p = this.props.get(code); return p ? p.cur : undefined; }
+  get buttons() { const p = this.props.get(P.BUTTONS); return p ? p.values : []; }
+  async control(code, bytes, flag = false) {
+    const r = await this.ptp.tx(0x9207, flag ? [code, 1] : [code], bytes);
+    if (r.code !== OK) throw new Error(hex(code) + ' abgelehnt (' + hex(r.code) + ')');
+  }
+  async setProp(code, bytes) {
+    let r = await this.ptp.tx(0x9205, this.ext ? [code, 1] : [code], bytes);
+    if (r.code !== OK) r = await this.ptp.tx(0x9205, this.ext ? [code] : [code, 1], bytes);
+    if (r.code !== OK) throw new Error(hex(code) + ' abgelehnt (' + hex(r.code) + ')');
+  }
+  async setValue(code, value) {
+    const p = this.props.get(code);
+    if (!p) throw new Error('Von der Kamera nicht angeboten');
+    await this.setProp(code, enc(p.type, value));
+    await sleep(220); await this.refreshProps();
+  }
+  /** Drückt eine Taste der Kamera wie mit dem Finger */
+  async pressButton(btn, hold = 150) {
+    await this.control(C.BUTTON, u32((btn << 16) | 2)); await sleep(hold); await this.control(C.BUTTON, u32((btn << 16) | 1));
+  }
+
+  async frame() {
+    const r = await this.ptp.tx(0x1009, [0xFFFFC002]);
+    const d = r.data;
+    if (r.code !== OK || !d || d.length < 16) {
+      if (++this.denied === 60) { try { await this.control(C.LV_ENABLE, u16(2)); } catch {} }
+      return null;
+    }
+    this.denied = 0;
+    const v = new DataView(d.buffer, d.byteOffset, d.byteLength);
+    const off = v.getUint32(0, true), size = v.getUint32(4, true), moff = v.getUint32(8, true), msize = v.getUint32(12, true);
+    if (!size || off + size > d.length) return null;
+    const frames = msize && moff + msize <= d.length ? parseFrames(d.subarray(moff, moff + msize)) : [];
+    const img = await createImageBitmap(new Blob([d.subarray(off, off + size)], { type: 'image/jpeg' }));
+    return { img, frames };
+  }
+
+  async touch(nx, ny) {
+    const x = Math.max(0, Math.min(639, Math.round(nx * 639))), y = Math.max(0, Math.min(479, Math.round(ny * 479)));
+    const pos = u32((x << 16) | y), mode = this.touchMode;
+    if (mode === 'touch' || (mode === 'auto' && this.prop(P.TOUCH_OK) === 1)) {
+      try { await this.control(C.TOUCH, pos); return 'Touch'; } catch (e) { if (mode === 'touch') throw e; }
+    }
+    const fa = this.props.get(P.FOCUS_AREA), movable = a => a === 2 || a >= 0x100;
+    if (fa && !movable(fa.cur)) {
+      const pick = [0x0102, 0x0101, 0x0103].find(x => fa.values.includes(x)) ?? fa.values.find(a => a >= 0x100) ?? 0x0102;
+      await this.setProp(P.FOCUS_AREA, u16(pick)); await sleep(200);
+    }
+    await this.control(C.AF_POS, pos);
+    this.control(C.S1, u16(2)).then(() => sleep(700)).then(() => this.control(C.S1, u16(1))).catch(() => {});
+    return 'AF-Feld';
+  }
+  cancelTouch() { return this.control(C.TOUCH_CANCEL, u16(2)).then(() => this.control(C.TOUCH_CANCEL, u16(1))); }
+  nearFar(step) { return this.control(C.NEAR_FAR, i16(step)); }
+  get isMF() { return this.prop(P.FOCUS_MODE) === 1; }
+  get recording() { const s = this.prop(P.REC_STATE); return s === 1 || s === 2; }
+
+  async _waitRec(want, ms) {
+    const t = performance.now();
+    do { await this.refreshProps(); if (this.recording === want) return true; await sleep(120); } while (performance.now() - t < ms);
+    return false;
+  }
+  /* REC: Die Kameras reagieren nicht alle auf denselben Befehl. Es werden der Reihe nach mehrere Wege versucht,
+     der erste erfolgreiche wird pro Modell gemerkt. Jeder Versuch steht im Diagnose Protokoll. */
+  async toggleRec() {
+    await this.refreshProps();
+    const want = !this.recording;
+    const ways = {
+      'taste': async () => { await this.control(C.REC, u16(2)); await sleep(150); await this.control(C.REC, u16(1)); },
+      'halten': async () => { await this.control(C.REC, u16(want ? 2 : 1)); },
+      'taste+option': async () => { await this.control(C.REC, u16(2), true); await sleep(150); await this.control(C.REC, u16(1), true); },
+      'movie-knopf': async () => { if (!this.buttons.includes(BTN_MOVIE)) throw new Error('MOVIE Taste nicht fernsteuerbar'); await this.pressButton(BTN_MOVIE, 200); },
+      'toggle': async () => { await this.control(C.REC_TOGGLE, u16(2), true); await sleep(150); await this.control(C.REC_TOGGLE, u16(1), true).catch(() => {}); },
+    };
+    const order = [...new Set([this.recMethod, 'taste', 'halten', 'taste+option', 'movie-knopf', 'toggle'].filter(m => m && ways[m]))];
+    this.log('REC ' + (want ? 'Start' : 'Stop') + ', Status vorher=' + this.prop(P.REC_STATE));
+    for (const m of order) {
+      try { await ways[m](); } catch (e) { this.log('  ' + m + ': ' + e.message); continue; }
+      const ok = await this._waitRec(want, 2500);
+      this.log('  ' + m + ': ' + (ok ? 'OK' : 'keine Reaktion') + ', Status=' + this.prop(P.REC_STATE));
+      if (ok) { this.recMethod = m; store.set('recm.' + this.name, m); return want; }
+    }
+    throw new Error('Kamera reagiert nicht auf REC (siehe Menü → Diagnose)');
+  }
+  async addMark() {
+    if (!this.markBtn) throw new Error('Keine Marker Taste gewählt');
+    await this.pressButton(this.markBtn, 120);
+    this.log('Marker über Taste ' + (BTN_NAME[this.markBtn] || hex(this.markBtn)));
+  }
+  setMarkBtn(b) { this.markBtn = b; store.set('mark.' + this.name, b); }
+}
+
+/* ---- Demo Kamera ---- */
+class DemoCamera {
+  constructor(n) {
+    this.name = n % 3 === 0 ? 'ILCE-7M4 (Demo)' : 'ILME-FX3 (Demo)'; this.key = 'demo' + n; this.touchMode = 'auto'; this.markBtn = null;
+    this.cv = document.createElement('canvas'); this.cv.width = 960; this.cv.height = 540;
+    this.g = this.cv.getContext('2d'); this.fx = .5; this.fy = .5; this.rec = false; this.t0 = performance.now(); this.hue = n * 70; this.depth = .55;
+    const e = (cur, values, type = 6) => ({ cur, values, type, writable: 1, enabled: 1, range: null });
+    const fx3 = this.name.includes('FX3');
+    this.props = new Map([
+      [P.FOCUS_MODE, e(0x8004, [2, 0x8004, 0x8006, 1], 4)], [P.FOCUS_AREA, e(2, [1, 2, 3, 0x101, 0x102, 0x103, 0x104, 0x201, 0x202], 4)],
+      [P.FNUM, e(280, [200, 220, 250, 280, 320, 350, 400, 450, 500, 560, 630, 710, 800, 900, 1000, 1100, 1300, 1400, 1600, 1800, 2000, 2200], 4)],
+      [P.WB, e(0x8012, [2, 4, 0x8011, 0x8010, 6, 0x8012, 0x8020], 4)],
+      [P.KELVIN, { cur: 4300, values: [], type: 4, writable: 1, enabled: 1, range: { min: 2500, max: 9900, step: 100 } }],
+      [P.FILE_FMT, e(0x08, [], 2)], [P.REC_FPS, e(fx3 ? 0x04 : 0x06, [], 2)],
+      [P.SLOT1_T, e(95 * 60, [])], [P.SLOT2_T, e(46 * 60, [])], [P.REC_STATE, e(0, [], 2)],
+      [P.BATT, e(97 - n * 9, [], 1)], [P.BATT_IND, e(n % 2 ? 0x0F : 0x07, [], 2)], [P.BUTTONS, e(0, [0x14, 0x15, 0x16, 0x17, 0x1A], 4)],
+    ]);
+    if (fx3) {
+      this.props.set(P.MOVIE_MODE, e(0x0301, [], 4)); this.props.set(P.SH_MODE, e(2, [1, 2], 2));
+      this.props.set(P.SH_ANGLE, e(360000, [5600, 11250, 22500, 45000, 72000, 90000, 144000, 150000, 172800, 180000, 216000, 270000, 300000, 360000]));
+      this.props.set(P.BASE_ISO, e(1, [1, 2], 2)); this.props.set(P.EI, e(12800, [3200, 4000, 5000, 6400, 8000, 10000, 12800, 16000, 20000, 25600, 32000, 51200], 4));
+      this.props.set(P.ISO_CUR, e(12800, []));
+    } else {
+      this.props.set(P.ISO, e(800, [0xFFFFFF, 100, 125, 160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200, 4000, 5000, 6400, 12800, 25600, 51200]));
+      this.props.set(P.SHUTTER, e(0x00010032, [0x00010019, 0x0001001E, 0x00010028, 0x00010032, 0x0001003C, 0x00010050, 0x00010064, 0x0001007D, 0x000100C8, 0x000100FA, 0x000101F4, 0x000103E8]));
+    }
+  }
+  log(m) { diag(this.name, m); }
+  async connect() {} async close() {} async refreshProps() {}
+  prop(code) { const p = this.props.get(code); return p ? p.cur : undefined; }
+  get buttons() { return this.props.get(P.BUTTONS).values; }
+  get isMF() { return this.prop(P.FOCUS_MODE) === 1; } get recording() { return this.rec; }
+  async setValue(code, v) { await sleep(60); const p = this.props.get(code); p.cur = v; if (code === P.BASE_ISO) this.props.get(P.ISO_CUR).cur = v === 1 ? 12800 : 800; }
+  async frame() {
+    await sleep(33);
+    const g = this.g, W = 960, H = 540, t = (performance.now() - this.t0) / 1000;
+    g.fillStyle = `hsl(${this.hue},22%,12%)`; g.fillRect(0, 0, W, H);
+    const objs = [[.25, .55, 90, .2], [.55, .45, 120, .55], [.8, .6, 70, .9]];
+    for (const [ox, oy, r, z] of objs) {
+      const x = (ox + Math.sin(t * .4 + z * 5) * .04) * W, y = oy * H, blur = Math.abs(z - this.depth) * 28;
+      const grd = g.createRadialGradient(x, y, Math.max(1, r - blur - 2), x, y, r + blur);
+      grd.addColorStop(0, `hsl(${this.hue + z * 120},55%,60%)`); grd.addColorStop(1, `hsla(${this.hue + z * 120},55%,60%,0)`);
+      g.fillStyle = grd; g.beginPath(); g.arc(x, y, r + blur, 0, 7); g.fill();
+    }
+    const lamp = g.createRadialGradient(W * .88, H * .2, 4, W * .88, H * .2, 110);
+    lamp.addColorStop(0, '#fff'); lamp.addColorStop(.45, '#fff'); lamp.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = lamp; g.fillRect(W * .7, 0, W * .3, H * .5);
+    const foc = this.isMF ? 1 : 2, fx = .55 + Math.sin(t * .4 + .55 * 5) * .04;
+    return { img: this.cv, frames: [
+      { kind: 'focus', type: 4, state: 1, x: .5, y: .5, w: .5, h: .6 },
+      { kind: 'face', type: 2, state: foc, x: fx, y: .4, w: .11, h: .2 }, { kind: 'face', type: 2, state: foc, x: fx - .02, y: .37, w: .03, h: .05 },
+      { kind: 'track', type: 2, state: foc, x: this.fx, y: this.fy, w: .08, h: .13 }] };
+  }
+  async touch(nx, ny) { this.fx = nx; this.fy = ny; this.depth = [[.25, .2], [.55, .55], [.8, .9]].reduce((b, o) => Math.abs(o[0] - nx) < Math.abs(b[0] - nx) ? o : b)[1]; return 'Demo'; }
+  async cancelTouch() { this.fx = .5; this.fy = .5; }
+  async nearFar(s) { this.depth = Math.max(0, Math.min(1, this.depth + s * .01)); }
+  async toggleRec() { await sleep(300); this.rec = !this.rec; return this.rec; }
+  async addMark() { if (!this.markBtn) throw new Error('Keine Marker Taste gewählt'); }
+  setMarkBtn(b) { this.markBtn = b; }
+}
+
+const VIDEO_WISH = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+const AUDIO_WISH = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 }, sampleRate: { ideal: 96000 } };
+/* ---- Videoeingang des Rechners (FaceTime, iPhone, Webcam): nur Ansicht ---- */
+class WebcamCamera {
+  constructor(id, label, stream) {
+    this.id = id; this.ready = stream; this.name = label || 'Kamera'; this.key = 'web:' + id; this.viewOnly = true; this.props = new Map(); this.touchMode = 'auto'; this.markBtn = null;
+    this.video = document.createElement('video'); this.video.muted = true; this.video.playsInline = true;
+  }
+  log(m) { diag(this.name, m); }
+  async connect() {
+    this.stream = this.ready || await navigator.mediaDevices.getUserMedia({ video: { ...VIDEO_WISH, deviceId: { exact: this.id } } }); this.ready = null;
+    this.video.srcObject = this.stream; await this.video.play();
+  }
+  async close() { if (this.stream) this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+  async refreshProps() {} prop() {} get buttons() { return []; } get isMF() { return false; } get recording() { return false; }
+  async frame() { await sleep(33); const v = this.video; return v.readyState >= 2 && v.videoWidth ? { img: v, frames: [] } : null; }
+  async touch() { throw new Error('Nur Ansicht, keine Steuerung'); }
+  async cancelTouch() {} async nearFar() {} async toggleRec() { return false; } async addMark() {} setMarkBtn() {}
+}
+
+/* ============================================================
+   Audio: Eingänge des Rechners, Pegel, WAV Aufnahme (32 Bit Float, Abtastrate des Geräts)
+   ============================================================ */
+const TAP_SRC = `class Tap extends AudioWorkletProcessor{constructor(){super();this.buf=[];this.n=0;this.pk=new Array(8).fill(0)}
+process(inputs){const inp=inputs[0];if(!inp||!inp.length)return true;const ch=inp.length,len=inp[0].length,out=new Float32Array(len*ch);
+for(let c=0;c<ch;c++){const d=inp[c];let p=this.pk[c];for(let i=0;i<len;i++){const v=d[i];out[i*ch+c]=v;const a=v<0?-v:v;if(a>p)p=a}this.pk[c]=p}
+this.buf.push(out);this.n+=len;if(this.n>=2048){const all=new Float32Array(this.n*ch);let o=0;for(const b of this.buf){all.set(b,o);o+=b.length}
+this.port.postMessage({pcm:all,peaks:this.pk.slice(0,ch)},[all.buffer]);this.buf=[];this.n=0;this.pk.fill(0)}return true}}
+registerProcessor('tap',Tap)`;
+let tapUrl = null;
+
+function wavHeader(bytes, rate, ch) {
+  const b = new ArrayBuffer(58), v = new DataView(b), str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, Math.min(0xFFFFFFFF, 50 + bytes), true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 18, true); v.setUint16(20, 3, true); v.setUint16(22, ch, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * ch * 4, true); v.setUint16(32, ch * 4, true); v.setUint16(34, 32, true); v.setUint16(36, 0, true);
+  str(38, 'fact'); v.setUint32(42, 4, true); v.setUint32(46, Math.floor(bytes / (ch * 4)), true);
+  str(50, 'data'); v.setUint32(54, Math.min(0xFFFFFFFF, bytes), true);
+  return b;
+}
+class WavWriter {
+  constructor(name, rate, ch, dir) { this.name = name; this.rate = rate; this.ch = ch; this.dir = dir; this.bytes = 0; this.q = Promise.resolve(); this.chunks = []; this.w = null; }
+  async open() {
+    if (!this.dir) return;
+    try { const fh = await this.dir.getFileHandle(this.name, { create: true }); this.w = await fh.createWritable(); await this.w.write(wavHeader(0, this.rate, this.ch)); }
+    catch (e) { this.w = null; diag('Audio', 'Ordner nicht beschreibbar: ' + e.message); }
+  }
+  write(f32) { this.bytes += f32.byteLength; if (this.w) this.q = this.q.then(() => this.w.write(f32)).catch(e => { this.err = e; }); else this.chunks.push(f32); }
+  async close() {
+    const head = wavHeader(this.bytes, this.rate, this.ch);
+    if (this.w) { await this.q; await this.w.write({ type: 'write', position: 0, data: head }); await this.w.close(); if (this.err) throw this.err; return 'Ordner'; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([head, ...this.chunks], { type: 'audio/wav' })); a.download = this.name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); this.chunks = []; return 'Download';
+  }
+}
+class AudioSource {
+  constructor(id, label, stream) { this.id = id; this.stream = stream; this.label = label || 'Eingang'; this.peaks = [0]; this.hold = [0]; this.clip = 0; this.writer = null; this.ch = 1; this.rate = 0; }
+  async start() {
+    if (!this.stream) this.stream = await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO_WISH, deviceId: { exact: this.id } } });
+    const st = this.stream.getAudioTracks()[0].getSettings();
+    this.ch = Math.max(1, Math.min(8, st.channelCount || 2));
+    try { this.ctx = new AudioContext({ sampleRate: st.sampleRate, latencyHint: 'playback' }); } catch { this.ctx = new AudioContext(); }
+    const onBlock = (pcm, pk) => {
+      this.peaks = pk;
+      for (let c = 0; c < pk.length; c++) { if (!(this.hold[c] >= pk[c])) this.hold[c] = pk[c]; if (pk[c] >= .98) this.clip = performance.now(); }
+      if (this.writer) this.writer.write(pcm);
+    };
+    const mute = this.ctx.createGain(); mute.gain.value = 0;
+    const input = this.ctx.createMediaStreamSource(this.stream);
+    try {
+      // Als lokale Datei geöffnet lädt Chrome das Worklet nur über eine data: Adresse
+      if (!tapUrl) tapUrl = 'data:application/javascript;base64,' + btoa(TAP_SRC);
+      await this.ctx.audioWorklet.addModule(tapUrl);
+      this.node = new AudioWorkletNode(this.ctx, 'tap', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: this.ch, channelCountMode: 'explicit', channelInterpretation: 'discrete' });
+      this.node.port.onmessage = e => onBlock(e.data.pcm, e.data.peaks);
+    } catch (err) {
+      diag('Audio', 'Worklet nicht verfügbar (' + err.message + '), nutze ScriptProcessor');
+      const ch = this.ch; this.node = this.ctx.createScriptProcessor(4096, ch, ch);
+      this.node.channelCount = ch; this.node.channelCountMode = 'explicit'; this.node.channelInterpretation = 'discrete';
+      this.node.onaudioprocess = e => {
+        const len = e.inputBuffer.length, out = new Float32Array(len * ch), pk = new Array(ch).fill(0);
+        for (let c = 0; c < ch; c++) { const d = e.inputBuffer.getChannelData(c); let m = 0; for (let i = 0; i < len; i++) { const v = d[i]; out[i * ch + c] = v; const a = v < 0 ? -v : v; if (a > m) m = a; } pk[c] = m; }
+        onBlock(out, pk);
+      };
+    }
+    input.connect(this.node); this.node.connect(mute); mute.connect(this.ctx.destination);
+    this.rate = this.ctx.sampleRate; this.peaks = new Array(this.ch).fill(0); this.hold = new Array(this.ch).fill(0);
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    diag('Audio', this.label + ': ' + this.rate + ' Hz, ' + this.ch + ' Kanal');
+  }
+  stop() { try { this.stream.getTracks().forEach(t => t.stop()); this.ctx.close(); } catch {} }
+}
+
+/* ============================================================
+   Werte formatieren
+   ============================================================ */
+const WB_NAME = { 1: 'Manuell', 2: 'AWB', 3: 'One Push', 4: 'Tageslicht', 5: 'Leuchtstoff', 6: 'Kunstlicht', 7: 'Blitz',
+  0x8001: 'Leucht. warm', 0x8002: 'Leucht. kalt', 0x8003: 'Leucht. Tag', 0x8004: 'Leucht. Tagw.', 0x8010: 'Bewölkt', 0x8011: 'Schatten',
+  0x8012: 'Kelvin', 0x8020: 'Custom 1', 0x8021: 'Custom 2', 0x8022: 'Custom 3', 0x8023: 'Custom' };
+const FMT_NAME = { 3: 'AVCHD', 4: 'MP4', 6: 'XAVC', 7: 'MXF', 8: 'XAVC S 4K', 9: 'XAVC S HD', 0x0A: 'XAVC HS 8K', 0x0B: 'XAVC HS 4K', 0x0C: 'XAVC S-L 4K',
+  0x0D: 'XAVC S-L HD', 0x0E: 'XAVC S-I 4K', 0x0F: 'XAVC S-I HD', 0x10: 'XAVC I', 0x11: 'XAVC L', 0x12: 'XAVC Proxy', 0x13: 'XAVC HS HD', 0x14: 'XAVC S-I DCI 4K' };
+const FPS_NAME = { 1: '120p', 2: '100p', 3: '60p', 4: '50p', 5: '30p', 6: '25p', 7: '24p', 8: '23.98p', 9: '29.97p', 0x0A: '59.94p', 0x16: '24.00p' };
+const AF_NAME = { 1: 'MF', 2: 'AF-S', 3: 'Makro', 0x8004: 'AF-C', 0x8005: 'AF-A', 0x8006: 'DMF', 0x8009: 'PF' };
+const AREA_NAME = { 1: 'Breit', 2: 'Feld', 3: 'Mitte-Fix', 0x101: 'Spot: S', 0x102: 'Spot: M', 0x103: 'Spot: L', 0x104: 'Erw. Spot', 0x105: 'Spot', 0x106: 'Spot: XS', 0x107: 'Spot: XL',
+  0x201: 'Tracking: Breit', 0x202: 'Tracking: Feld', 0x203: 'Tracking: Mitte', 0x204: 'Tracking: Spot S', 0x205: 'Tracking: Spot M', 0x206: 'Tracking: Spot L',
+  0x207: 'Tracking: Erw. Spot', 0x208: 'Tracking: Spot', 0x209: 'Tracking: Spot XS', 0x20A: 'Tracking: Spot XL' };
+const fmtF = v => v >= 0xFFFD || !v ? '--' : (v / 100).toFixed(v >= 1000 && v % 100 === 0 ? 0 : 1);
+const fmtAngle = v => v ? String(+(v / 1000).toFixed(1)) + '°' : '--';
+const fmtSS = v => { if (v === 0) return 'BULB'; if (v == null || v === 0xFFFFFFFF) return '--'; const n = v >>> 16, d = v & 0xFFFF; return d === 1 ? n + '"' : n === 1 ? '1/' + d : (n / d).toFixed(1) + '"'; };
+const ssSec = v => (v >>> 16) / ((v & 0xFFFF) || 1);
+const fmtISO = v => { if (v == null) return '--'; const i = v & 0xFFFFFF; return i === 0xFFFFFF ? 'AUTO' : String(i); };
+const fmtMin = s => s >= 3600 ? Math.floor(s / 3600) + 'h' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + 'm' : Math.floor(s / 60) + 'm';
+const fmtDur = ms => { const s = Math.floor(ms / 1000), p = n => String(n).padStart(2, '0'); return (s >= 3600 ? p(Math.floor(s / 3600)) + ':' : '') + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60); };
+const usable = p => p && p.writable && p.enabled === 1;
+const isFX = cam => /FX3|FX30|FX6|FX2/i.test(cam.name);
+const cineEI = cam => cam.prop(P.MOVIE_MODE) === 0x0301 && cam.props.get(P.EI);
+const angleMode = cam => cam.prop(P.SH_MODE) === 2 && cam.props.get(P.SH_ANGLE);
+
+/** Aktuelle Anzeige pro Feld: {value, label, on} */
+function cellData(cam, zebraOn) {
+  const g = c => cam.props.get(c), d = {};
+  d.fps = { label: 'FPS', value: FPS_NAME[cam.prop(P.REC_FPS)] || '--', on: false };
+  const sa = g(P.SH_ANGLE), ss = g(P.SHUTTER);
+  d.shutter = angleMode(cam) ? { label: 'SHUTTER', value: fmtAngle(sa.cur), on: usable(sa) } : { label: 'SHUTTER', value: ss ? fmtSS(ss.cur) : '--', on: usable(ss) };
+  const fn = g(P.FNUM); d.iris = { label: 'BLENDE', value: fn ? fmtF(fn.cur) : '--', on: usable(fn) && fn.values.length > 0 };
+  const ei = g(P.EI), base = g(P.BASE_ISO), iso = g(P.ISO), cur = g(P.ISO_CUR);
+  d.iso = cineEI(cam) ? { label: 'EI ' + ei.cur, value: cur && cur.cur ? String(cur.cur) : (base ? (base.cur === 1 ? 'HIGH' : 'LOW') : '--'), on: usable(base) || usable(ei) }
+                      : { label: 'ISO', value: iso ? fmtISO(iso.cur) : '--', on: usable(iso) };
+  const wb = g(P.WB), k = g(P.KELVIN);
+  d.wb = { label: 'WB', value: wb ? (wb.cur === 0x8012 && k ? k.cur + 'K' : (WB_NAME[wb.cur] || hex(wb.cur))) : '--', on: usable(wb) };
+  const fm = g(P.FOCUS_MODE); d.focus = { label: 'FOKUS', value: fm ? (AF_NAME[fm.cur] || 'AF') : '--', on: !!fm };
+  const fa = g(P.FOCUS_AREA); d.area = { label: 'FELD', value: fa ? (AREA_NAME[fa.cur] || hex(fa.cur)).replace('Tracking: ', 'T: ') : '--', on: usable(fa) };
+  d.zebra = { label: 'ZEBRA', value: zebraOn ? zebraPct + '%' : 'Aus', on: true };
+  return d;
+}
+function battery(cam) {
+  const pct = cam.prop(P.BATT), ind = cam.prop(P.BATT_IND);
+  return { pct: pct != null && pct >= 0 && pct <= 100 ? pct : null, usb: ind >= 0x0B && ind <= 0x10 };
+}
+function mediaText(cam) {
+  return [[1, P.SLOT1_T], [2, P.SLOT2_T]].map(([n, c]) => { const p = cam.props.get(c); return p && p.cur > 0 && p.cur !== 0xFFFFFFFF ? n + ' · ' + fmtMin(p.cur) : ''; }).filter(Boolean).join('   ');
+}
+/** Aus einer Werteliste die gewünschten Favoriten wählen (jeweils der nächstliegende vorhandene Wert) */
+function pickPresets(values, wanted, num = v => v) {
+  const out = [];
+  for (const w of wanted) { let best = null; for (const v of values) if (best == null || Math.abs(num(v) - w) < Math.abs(num(best) - w)) best = v;
+    if (best != null && Math.abs(num(best) - w) <= w * .08 && !out.includes(best)) out.push(best); }
+  return out;
+}
+
+/* ============================================================
+   Oberfläche
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const grid = $('#grid'), empty = $('#empty'), banner = $('#banner'), recAll = $('#recAll');
+const tiles = new Map();
+let demoCount = 0, zebraPct = store.get('zebraPct', 93);
+const zebraY = () => Math.min(254, Math.round(16 + 219 * zebraPct / 100));   // Prozent auf Videoskala (0% = 16, 100% = 235)
+
+function showBanner(text) { banner.textContent = text; banner.style.display = text ? 'block' : 'none'; }
+function layout() {
+  const n = tiles.size + (audio.el ? 1 : 0);
+  grid.hidden = n === 0; empty.style.display = n ? 'none' : 'flex';
+  const solo = [...tiles.values()].some(t => t.el.classList.contains('solo'));
+  recAll.style.display = n && !solo ? 'flex' : 'none';
+  if (!n) return;
+  const portrait = innerHeight > innerWidth * 1.1;
+  let cols = Math.ceil(Math.sqrt(n));
+  if (portrait) cols = n <= 3 ? 1 : 2; else if (n === 2) cols = 2;
+  grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  grid.style.paddingBottom = '88px';
+  syncRecAll();
+}
+addEventListener('resize', layout);
+function syncRecAll() {
+  const any = audio.recording || [...tiles.values()].some(t => t.cam.recording);
+  recAll.querySelector('.recbtn').classList.toggle('on', any);
+  $('#recAllText').textContent = any ? 'ALLE STOPPEN' : 'ALLE AUFNEHMEN';
+}
+recAll.onclick = async () => {
+  const all = [...tiles.values()].filter(t => !t.cam.viewOnly), any = audio.recording || all.some(t => t.cam.recording);
+  const jobs = all.filter(t => t.cam.recording === any).map(t => t.rec());
+  if (audio.el && audio.recording === any && (any || audio.sources.length)) jobs.push(audioRec());
+  await Promise.all(jobs);   // läuft etwas: alle laufenden stoppen, sonst alle starten
+  syncRecAll();
+};
+
+const ERR_TEXT = {
+  'no-ptp': 'Kamera ist nicht im Modus PC-Fernbedienung.\nMenü → USB → USB Verbindungsmodus → PC-Fernbedienung, dann neu einstecken.',
+  'claim': 'Zugriff auf die Kamera blockiert.\nMonitor & Control, Imaging Edge, Fotos schliessen (Windows: WinUSB Treiber mit Zadig).\nDanach Kamera neu einstecken.',
+  'handshake': 'Kamera antwortet nicht auf die Sony Fernsteuerung.\nUSB Modus PC-Fernbedienung prüfen und Firmware aktualisieren.'
+};
+const MARK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-5-6 5z"/></svg>';
+
+class Tile {
+  constructor(cam) {
+    this.cam = cam; this.alive = true; this.frames = 0; this.zebra = store.get('zebra.' + cam.key, false); this.tick = 0; this.recStart = 0; this.open = null;
+    const t = this.el = el('div', 'tile');
+    t.innerHTML = `
+      <div class="view"><canvas width="16" height="9"></canvas>
+        <div class="chips l"><button class="back glass">‹</button><span class="chip glass name"></span><span class="chip time"></span></div>
+        <div class="chips r"><span class="chip glass fmt"></span><span class="chip glass media"></span><span class="chip glass batt"></span></div>
+        <div class="reticle"></div><div class="msg"></div><div class="toast glass"></div>
+        <div class="mini"><div class="vals glass"></div><button class="recbtn"><i></i></button></div>
+        <div class="panel glass"></div>
+      </div>
+      <div class="plate">
+        <div class="cells l"></div>
+        <div class="center"><button class="markbtn" title="Marker setzen (lange halten: Taste wählen)">${MARK_SVG}</button><button class="recbtn"><i></i></button><button class="markbtn trackoff" title="Tracking deaktivieren"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/><path d="M9 9l6 6M15 9l-6 6"/></svg></button></div>
+        <div class="cells r"></div>
+      </div>`;
+    const q = s => t.querySelector(s);
+    this.cv = q('canvas'); this.ctx = this.cv.getContext('2d');
+    this.msg = q('.msg'); this.toastEl = q('.toast'); this.ret = q('.reticle'); this.panel = q('.panel');
+    this.zc = document.createElement('canvas'); this.zctx = this.zc.getContext('2d', { willReadFrequently: true });
+    this.ui = { name: q('.name'), time: q('.time'), fmt: q('.fmt'), media: q('.media'), batt: q('.batt'), vals: q('.vals'), l: q('.cells.l'), r: q('.cells.r') };
+    this.ui.name.textContent = cam.name;
+    this.cells = {};
+    for (const [side, ids] of [['l', ['fps', 'shutter', 'iris', 'iso']], ['r', ['wb', 'focus', 'area', 'zebra']]]) for (const id of ids) {
+      const b = el('button', 'cell'); b.append(el('b'), el('small')); b.onclick = () => this.togglePanel(id); this.ui[side].appendChild(b); this.cells[id] = b;
+    }
+    const view = q('.view');
+    view.addEventListener('click', ev => {
+      if (ev.target.closest('button,.panel')) return;
+      if (!t.classList.contains('solo')) return this.setSolo(true);
+      const rc = view.getBoundingClientRect(), iw = this.cv.width, ih = this.cv.height;
+      const s = Math.min(rc.width / iw, rc.height / ih), dw = iw * s, dh = ih * s;
+      const nx = (ev.clientX - rc.left - (rc.width - dw) / 2) / dw, ny = (ev.clientY - rc.top - (rc.height - dh) / 2) / dh;
+      if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+      this.ret.style.left = (ev.clientX - rc.left) + 'px'; this.ret.style.top = (ev.clientY - rc.top) + 'px';
+      this.ret.classList.remove('on'); void this.ret.offsetWidth; this.ret.classList.add('on');
+      this.run(() => cam.touch(nx, ny));
+    });
+    q('.back').onclick = () => this.setSolo(false);
+    t.querySelectorAll('.recbtn').forEach(b => b.onclick = ev => { ev.stopPropagation(); this.rec(); });
+    const mb = q('.markbtn'); let mt = 0, long = false;
+    mb.addEventListener('pointerdown', () => { long = false; mt = setTimeout(() => { long = true; this.togglePanel('mark', true); }, 600); });
+    mb.addEventListener('pointerup', () => { clearTimeout(mt); if (long) return;
+      if (!cam.markBtn) return this.togglePanel('mark', true);
+      mb.classList.add('flash'); setTimeout(() => mb.classList.remove('flash'), 350);
+      this.run(() => cam.addMark(), () => 'Marker ' + (this.recStart ? fmtDur(Date.now() - this.recStart) : ''));
+    });
+    mb.addEventListener('pointerleave', () => clearTimeout(mt));
+    q('.trackoff').onclick = () => this.run(() => cam.cancelTouch(), () => 'Tracking deaktiviert');
+    if (cam.viewOnly) { t.classList.add('viewonly'); const x = el('button', 'chip glass rm', '✕'); x.onclick = ev => { ev.stopPropagation(); removeTile(cam.key); }; q('.chips.r').appendChild(x); }
+    grid.appendChild(t);
+    this.sync();
+    this.loop();
+  }
+
+  setSolo(on) {
+    for (const o of tiles.values()) if (o !== this) o.el.classList.remove('solo');
+    this.el.classList.toggle('solo', on); if (!on) this.closePanel();
+    layout();
+  }
+  toast(tx) { this.toastEl.textContent = tx; this.toastEl.classList.add('on'); clearTimeout(this.tt); this.tt = setTimeout(() => this.toastEl.classList.remove('on'), 2200); }
+  setMsg(tx) { this.msg.textContent = tx || ''; this.msg.classList.toggle('on', !!tx); }
+  async run(fn, okText) {
+    try { const r = await fn(); if (okText) this.toast(okText(r)); } catch (e) { this.toast(e.message || String(e)); }
+    this.sync();
+  }
+  async rec() {
+    if (this.recBusy || this.cam.viewOnly) return; this.recBusy = true;
+    this.el.querySelectorAll('.recbtn').forEach(b => b.classList.add('busy'));
+    await this.run(() => this.cam.toggleRec(), on => on ? 'Aufnahme läuft' : 'Aufnahme gestoppt');
+    this.el.querySelectorAll('.recbtn').forEach(b => b.classList.remove('busy'));
+    this.recBusy = false; syncRecAll();
+  }
+
+  sync() {
+    const cam = this.cam, rec = !!cam.recording, ui = this.ui;
+    if (rec && !this.recStart) this.recStart = Date.now(); if (!rec) this.recStart = 0;
+    this.el.classList.toggle('rec', rec);
+    ui.time.textContent = rec ? fmtDur(Date.now() - this.recStart) : '';
+    const d = cellData(cam, this.zebra);
+    for (const id in this.cells) { const c = this.cells[id], x = d[id]; c.firstChild.textContent = x.value; c.lastChild.textContent = x.label; c.classList.toggle('off', !x.on && id !== 'fps'); }
+    const fmt = FMT_NAME[cam.prop(P.FILE_FMT)] || '';
+    ui.fmt.textContent = [fmt, d.fps.value !== '--' ? d.fps.value : ''].filter(Boolean).join(' · ');
+    ui.media.textContent = mediaText(cam);
+    const b = battery(cam), sig = JSON.stringify(b);
+    if (sig !== this.battSig) { this.battSig = sig; ui.batt.textContent = '';
+      if (b.pct != null) { const i = el('i', 'bat'); const f = el('i'); f.style.width = b.pct + '%'; i.appendChild(f); ui.batt.append(i, b.pct + '%' + (b.usb ? ' ⚡' : '')); ui.batt.classList.toggle('low', b.pct <= 15 && !b.usb); }
+      else if (b.usb) ui.batt.textContent = '⚡ USB'; }
+    const mini = [['', d.fps.value], ['', d.shutter.value], ['F', d.iris.value], [cineEI(cam) ? 'EI' : 'ISO', cineEI(cam) ? cam.prop(P.EI) : d.iso.value], ['', d.wb.value], ['', fmt]].filter(x => x[1] && x[1] !== '--');
+    const msig = JSON.stringify(mini);
+    if (msig !== this.miniSig) { this.miniSig = msig; ui.vals.textContent = ''; for (const [l, v] of mini) { const s = el('div'); if (l) s.appendChild(el('span', '', l)); s.append(String(v)); ui.vals.appendChild(s); } }
+  }
+
+  /* ---------- Einstell Panel ---------- */
+  closePanel() { this.open = null; this.panel.classList.remove('on'); this.panel.textContent = ''; for (const id in this.cells) this.cells[id].classList.remove('act'); }
+  togglePanel(id, force) {
+    if (this.open === id && !force) return this.closePanel();
+    if (id === 'fps') return this.toast('Format und FPS werden an der Kamera eingestellt');
+    this.closePanel();
+    const p = this.panel, title = { shutter: 'Verschluss', iris: 'Blende', iso: 'ISO', wb: 'Weissabgleich', focus: 'Fokus', area: 'Fokusfeld', zebra: 'Zebra', mark: 'Marker' }[id];
+    const h = el('h4', '', title), x = el('button', '', '✕'); x.onclick = () => this.closePanel(); h.appendChild(x); p.appendChild(h);
+    if (!this['panel_' + id](p)) { p.textContent = ''; return this.toast('An der Kamera gesperrt oder nicht verfügbar'); }
+    this.open = id; p.classList.add('on'); if (this.cells[id]) this.cells[id].classList.add('act');
+  }
+  reopen() { if (this.open) this.togglePanel(this.open, true); }
+  set(code, value) { return this.run(() => this.cam.setValue(code, value)).then(() => this.reopen()); }
+  segRow(p, label, items, small) {       // items: {text, cur, pick}
+    const r = el('div', 'row'); if (label) r.appendChild(el('span', 'lab', label));
+    for (const it of items) { const b = el('button', 'seg' + (it.cur ? ' cur' : ''), it.text); b.onclick = it.pick; r.appendChild(b); }
+    p.appendChild(r); return r;
+  }
+  /** Favoriten oben, darunter Pfeile und Regler über alle Werte */
+  adjust(p, values, cur, fmt, presets, commit) {
+    if (!values.length) return false;
+    const pr = el('div', 'presets');
+    for (const v of presets) { const b = el('button', v === cur ? 'cur' : '', fmt(v)); b.onclick = () => commit(v); pr.appendChild(b); }
+    if (presets.length) p.appendChild(pr);
+    let idx = values.indexOf(cur); if (idx < 0) idx = values.reduce((b, v, i) => Math.abs(v - cur) < Math.abs(values[b] - cur) ? i : b, 0);
+    const f = el('div', 'fine'), dn = el('button', 'step', '‹'), up = el('button', 'step', '›'), val = el('div', 'val', fmt(values[idx])), sl = el('input');
+    sl.type = 'range'; sl.min = 0; sl.max = values.length - 1; sl.step = 1; sl.value = idx;
+    dn.onclick = () => { if (idx > 0) commit(values[idx - 1]); }; up.onclick = () => { if (idx < values.length - 1) commit(values[idx + 1]); };
+    sl.oninput = () => { val.textContent = fmt(values[+sl.value]); };
+    sl.onchange = () => commit(values[+sl.value]);
+    f.append(dn, val, up, sl); p.appendChild(f);
+    return true;
+  }
+  panel_iris(p) {
+    const pr = this.cam.props.get(P.FNUM); if (!usable(pr)) return false;
+    const vals = pr.values.filter(v => v && v < 0xFFFD).sort((a, b) => a - b);
+    return this.adjust(p, vals, pr.cur, fmtF, pickPresets(vals, [200, 280, 400, 560, 800, 1600]), v => this.set(P.FNUM, v));
+  }
+  panel_shutter(p) {
+    const cam = this.cam;
+    if (angleMode(cam)) {
+      const pr = cam.props.get(P.SH_ANGLE); if (!usable(pr)) return false;
+      const vals = pr.values.filter(v => v && v !== 0xFFFFFFFF).sort((a, b) => a - b);
+      return this.adjust(p, vals, pr.cur, fmtAngle, pickPresets(vals, [360000, 180000, 172800, 144000, 90000, 45000]), v => this.set(P.SH_ANGLE, v));
+    }
+    const pr = cam.props.get(P.SHUTTER); if (!usable(pr)) return false;
+    const vals = pr.values.filter(v => v && v !== 0xFFFFFFFF).sort((a, b) => ssSec(b) - ssSec(a));
+    return this.adjust(p, vals, pr.cur, fmtSS, pickPresets(vals, [1 / 25, 1 / 50, 1 / 100, 1 / 200, 1 / 500, 1 / 1000], ssSec), v => this.set(P.SHUTTER, v));
+  }
+  panel_iso(p) {
+    const cam = this.cam, g = c => cam.props.get(c), fx = isFX(cam);
+    if (cineEI(cam)) {
+      const base = g(P.BASE_ISO), ei = g(P.EI);
+      if (usable(base)) this.segRow(p, 'Base ISO', [{ text: fx ? '800' : 'Low', cur: base.cur === 2, pick: () => this.set(P.BASE_ISO, 2) }, { text: fx ? '12800' : 'High', cur: base.cur === 1, pick: () => this.set(P.BASE_ISO, 1) }]);
+      if (usable(ei) && ei.values.length) {
+        p.appendChild(el('div', 'row')).appendChild(el('span', 'lab', 'Exposure Index'));
+        const vals = [...ei.values].sort((a, b) => a - b);
+        this.adjust(p, vals, ei.cur, String, pickPresets(vals, [800, 1600, 3200, 6400, 12800, 25600]), v => this.set(P.EI, v));
+      }
+      return usable(base) || usable(ei);
+    }
+    const iso = g(P.ISO); if (!usable(iso)) return false;
+    const vals = iso.values.filter(v => v >>> 24 === 0 && v !== 0xFFFFFF).sort((a, b) => a - b), quick = (fx ? [800, 12800] : [800, 3200]).filter(v => !vals.length || vals.includes(v));
+    this.segRow(p, 'Schnellwahl', [...quick.map(v => ({ text: 'ISO ' + v, cur: (iso.cur & 0xFFFFFF) === v, pick: () => this.set(P.ISO, v) })),
+      ...(iso.values.includes(0xFFFFFF) ? [{ text: 'AUTO', cur: (iso.cur & 0xFFFFFF) === 0xFFFFFF, pick: () => this.set(P.ISO, 0xFFFFFF) }] : [])]);
+    if (vals.length) this.adjust(p, vals, iso.cur & 0xFFFFFF, String, pickPresets(vals, [100, 400, 1600, 6400, 25600]), v => this.set(P.ISO, v));
+    return true;
+  }
+  panel_wb(p) {
+    const cam = this.cam, wb = cam.props.get(P.WB), k = cam.props.get(P.KELVIN); if (!usable(wb)) return false;
+    const setK = async v => { await this.run(async () => { if (cam.prop(P.WB) !== 0x8012) await cam.setValue(P.WB, 0x8012); await cam.setValue(P.KELVIN, v); }); this.reopen(); };
+    if (k && k.range && k.range.step > 0 && wb.values.includes(0x8012)) {
+      const vals = []; for (let v = k.range.min; v <= k.range.max && vals.length < 400; v += k.range.step) vals.push(v);
+      this.adjust(p, vals, k.cur, v => v + 'K', pickPresets(vals, [2800, 3400, 4300, 5500, 6500, 7500]), setK);
+    }
+    this.segRow(p, 'Modus', wb.values.map(v => ({ text: WB_NAME[v] || hex(v), cur: v === wb.cur, pick: () => this.set(P.WB, v) })));
+    return true;
+  }
+  panel_focus(p) {
+    const cam = this.cam, fm = cam.props.get(P.FOCUS_MODE); if (!fm) return false;
+    const modes = (fm.values.length ? fm.values : [0x8004, 1]).filter(v => AF_NAME[v]);
+    this.segRow(p, 'Modus', modes.map(v => ({ text: AF_NAME[v], cur: v === fm.cur, pick: () => this.set(P.FOCUS_MODE, v) })));
+    const r = el('div', 'row'); r.appendChild(el('span', 'lab', 'Manuell'));
+    for (const [tx, step] of [['◀◀ Nah', -6], ['◀', -2], ['▶', 2], ['Fern ▶▶', 6]]) {
+      const b = el('button', 'seg', tx); let timer = 0; const stop = () => { clearInterval(timer); timer = 0; };
+      b.addEventListener('pointerdown', ev => { ev.preventDefault(); stop(); const go = () => this.run(() => cam.nearFar(step)); go(); timer = setInterval(go, 160); });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, stop)); r.appendChild(b);
+    }
+    p.appendChild(r);
+    const MODES = [['auto', 'Auto'], ['touch', 'Tracking'], ['area', 'AF-Feld']];
+    this.segRow(p, 'Tippen', [...MODES.map(([m, tx]) => ({ text: tx, cur: cam.touchMode === m, pick: () => { cam.touchMode = m; this.reopen(); } })),
+      { text: 'Tracking aufheben', pick: () => this.run(() => cam.cancelTouch(), () => 'Aufgehoben') }]);
+    return true;
+  }
+  panel_area(p) {
+    const fa = this.cam.props.get(P.FOCUS_AREA); if (!usable(fa) || !fa.values.length) return false;
+    const pr = el('div', 'presets small');
+    for (const v of fa.values.filter(v => AREA_NAME[v])) { const b = el('button', v === fa.cur ? 'cur' : '', AREA_NAME[v]); b.onclick = () => this.set(P.FOCUS_AREA, v); pr.appendChild(b); }
+    p.appendChild(pr); return true;
+  }
+  panel_zebra(p) {
+    const setOn = on => { this.zebra = on; store.set('zebra.' + this.cam.key, on); this.sync(); this.reopen(); };
+    const setLvl = v => { zebraPct = v; store.set('zebraPct', v); if (!this.zebra) return setOn(true); for (const t of tiles.values()) t.sync(); this.reopen(); };
+    this.segRow(p, '', [{ text: 'Aus', cur: !this.zebra, pick: () => setOn(false) }, { text: 'Ein', cur: this.zebra, pick: () => setOn(true) }]);
+    const vals = []; for (let v = 50; v <= 109; v++) vals.push(v);
+    this.adjust(p, vals, zebraPct, v => v + '%', [70, 80, 90, 93, 95, 100], setLvl);
+    p.appendChild(el('p', '', 'Streifen auf allen Bildteilen ab diesem Pegel. Gemessen wird das Livebild der Kamera.'));
+    return true;
+  }
+  panel_mark(p) {
+    const cam = this.cam, btns = cam.buttons.filter(b => BTN_NAME[b]);
+    p.appendChild(el('p', '', 'Die Kamera kennt keinen eigenen Marker Befehl. Die App drückt darum eine Custom Taste. Weise dieser Taste in der Kamera «Shot Mark 1 hinzufügen» zu und wähle sie hier.'));
+    if (btns.length) this.segRow(p, 'Taste', btns.map(b => ({ text: BTN_NAME[b], cur: cam.markBtn === b, pick: () => { cam.setMarkBtn(b); this.reopen(); } })));
+    else p.appendChild(el('p', '', 'Diese Kamera meldet keine fernsteuerbaren Tasten.'));
+    return true;
+  }
+
+  /* ---------- Bild ---------- */
+  draw(img, frames) {
+    const cv = this.cv, ctx = this.ctx;
+    const iw = img.videoWidth || img.width, ih = img.videoHeight || img.height;
+    if (cv.width !== iw || cv.height !== ih) { cv.width = iw; cv.height = ih; }
+    ctx.drawImage(img, 0, 0);
+    const W = cv.width, H = cv.height;
+    if (this.zebra) {
+      const zw = 480, zh = Math.max(2, Math.round(zw * H / W)), zc = this.zc, z = this.zctx;
+      if (zc.width !== zw || zc.height !== zh) { zc.width = zw; zc.height = zh; }
+      z.drawImage(img, 0, 0, zw, zh);
+      const id = z.getImageData(0, 0, zw, zh), d = id.data, thr = zebraY() * 1000, ph = (this.tick >> 1) % 8;
+      for (let y = 0, i = 0; y < zh; y++) for (let x = 0; x < zw; x++, i += 4) {
+        if (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114 >= thr) { const s = ((x + y + ph) & 7) < 4; d[i] = d[i + 1] = d[i + 2] = s ? 0 : 255; d[i + 3] = 255; } else d[i + 3] = 0;
+      }
+      z.putImageData(id, 0, 0);
+      ctx.imageSmoothingEnabled = false; ctx.drawImage(zc, 0, 0, W, H); ctx.imageSmoothingEnabled = true;
+    }
+    const u = Math.max(1, W / 640);
+    for (const f of frames) {
+      const w = f.w * W, h = f.h * H, x = f.x * W - w / 2, y = f.y * H - h / 2;
+      if (w < 2 || h < 2) continue;
+      ctx.strokeStyle = f.state === 2 ? '#3dff7a' : '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 2 * u;
+      if (f.kind === 'face') { ctx.lineWidth = u; ctx.strokeRect(x, y, w, h); }       // Gesicht und Auge: feines Rechteck
+      else {                                                                           // Fokusfeld und Tracking: vier Ecken
+        ctx.lineWidth = 2 * u; const c = Math.max(6 * u, Math.min(w, h) * (f.kind === 'track' ? .3 : .08)); ctx.beginPath();
+        for (const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) { ctx.moveTo(cx + sx * c, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy * c); }
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
+    this.tick++;
+  }
+
+  async loop() {
+    const cam = this.cam;
+    while (this.alive) {
+      try {
+        this.setMsg('Verbinde …');
+        await cam.connect();
+        this.setMsg(''); this.sync();
+        let lastProps = performance.now(), wait = 0;
+        while (this.alive) {
+          const t0 = performance.now();
+          const fr = await cam.frame();
+          const spare = 30 - (performance.now() - t0); if (fr && spare > 1) await sleep(spare);
+          if (fr) { wait = 0; this.setMsg(''); this.draw(fr.img, fr.frames); if (fr.img.close) fr.img.close(); }
+          else { if (++wait === 120) this.setMsg('Kein Livebild.\nKamera einschalten, Menü und Wiedergabe schliessen.'); await sleep(25); }
+          const now = performance.now();
+          if (now - lastProps > 1000) { lastProps = now; await cam.refreshProps(); this.sync(); syncRecAll(); }
+        }
+      } catch (e) {
+        if (!this.alive) break;
+        if (e.name === 'NotAllowedError' || e.name === 'NotFoundError' || e.name === 'OverconstrainedError') { this.setMsg('Kein Zugriff auf diese Kamera.\nBerechtigung im Browser prüfen und neu hinzufügen.'); while (this.alive) await sleep(500); break; }
+        console.warn(cam.name, e); cam.log('Fehler: ' + (e.kind || e.message || e));
+        this.setMsg(this.gone ? 'Kamera getrennt.\nWieder einstecken, sie verbindet sich automatisch.'
+          : ERR_TEXT[e.kind] || ('Verbindung verloren: ' + (e.message || e) + '\nNeuer Versuch …'));
+        try { await cam.close(); } catch {}
+        for (let i = 0; i < 30 && this.alive; i++) await sleep(100);
+        while (this.alive && this.gone) await sleep(300);
+      }
+    }
+    try { await cam.close(); } catch {}
+  }
+  /** Bild dieser Kachel als Videostream (inklusive Zebra und Rahmen) */
+  getStream() { return this.stream || (this.stream = this.cv.captureStream(25)); }
+  shareInfo() {
+    const u = this.ui; return { key: this.cam.key, name: this.cam.name, rec: !!this.cam.recording, time: u.time.textContent, fmt: u.fmt.textContent, media: u.media.textContent,
+      batt: u.batt.textContent, mini: JSON.parse(this.miniSig || '[]'), msg: this.msg.classList.contains('on') ? this.msg.textContent : '' };
+  }
+  destroy() { this.alive = false; this.el.remove(); }
+}
+setInterval(() => { for (const t of tiles.values()) if (t.recStart) t.ui.time.textContent = fmtDur(Date.now() - t.recStart); }, 500);
+addEventListener('keydown', ev => { if (ev.key === 'Escape') for (const t of tiles.values()) if (t.el.classList.contains('solo')) t.setSolo(false); });
+
+function addCamera(cam) { if (tiles.has(cam.key)) return; tiles.set(cam.key, new Tile(cam)); layout(); keepAwake(); }
+function removeTile(key) { const t = tiles.get(key); if (t) { t.el.classList.remove('solo'); t.destroy(); tiles.delete(key); layout(); } }
+
+$('#btnAdd').onclick = async () => {
+  if (!navigator.usb) { showBanner('Dieser Browser kann kein WebUSB. Bitte Chrome oder Edge auf Desktop oder Android verwenden. Die Demo funktioniert trotzdem.'); return; }
+  try { const dev = await navigator.usb.requestDevice({ filters: [{ vendorId: SONY_VID }] }); showBanner(''); addCamera(new SonyCamera(dev)); }
+  catch (e) {
+    if (e.name === 'NotFoundError') return;
+    showBanner(e.name === 'SecurityError' ? 'USB Zugriff ist in dieser Ansicht gesperrt. Datei herunterladen und direkt in Chrome öffnen.' : 'USB Fehler: ' + e.message);
+  }
+};
+/* ---------- Geräteauswahl (Videoeingänge und Mikrofone des Rechners) ---------- */
+/* Öffnet einen Eingang. Chrome fragt beim ersten Mal selbst nach dem Gerät (mit eigener Auswahl im Dialog).
+   Ist der Zugriff schon erlaubt, erscheint die eigene Liste. Der Stream bleibt offen, sonst gibt Chrome die Gerätenamen nicht heraus. */
+async function openInput(kind, title) {
+  const video = kind === 'videoinput', md = navigator.mediaDevices;
+  if (!md || !md.getUserMedia) { showBanner('Dieser Browser gibt keine Kameras und Mikrofone frei.'); return null; }
+  const wish = id => video ? { video: id ? { ...VIDEO_WISH, deviceId: { exact: id } } : VIDEO_WISH } : { audio: id ? { ...AUDIO_WISH, deviceId: { exact: id } } : AUDIO_WISH };
+  const info = st => { const tr = st.getTracks()[0], set = tr.getSettings(); return { stream: st, id: set.deviceId || tr.label, label: tr.label || (video ? 'Kamera' : 'Eingang') }; };
+  let first, t0 = performance.now();
+  try { first = await md.getUserMedia(wish()); }
+  catch (e) { showBanner((video ? 'Kamera' : 'Mikrofon') + ' nicht verfügbar: ' + (e.name === 'NotAllowedError' ? 'Zugriff im Browser oder in den macOS Einstellungen (Datenschutz) nicht erlaubt' : e.message)); return null; }
+  showBanner('');
+  const asked = performance.now() - t0 > 900, cur = info(first);
+  let list = []; try { list = (await md.enumerateDevices()).filter(d => d.kind === kind && d.deviceId && d.deviceId !== 'communications' && d.deviceId !== 'default' && d.label); } catch {}
+  if (cur.id === 'default' || cur.id === 'communications') {       // «Standard» auf das echte Gerät dahinter auflösen
+    const real = list.find(d => cur.label === d.label || cur.label.endsWith(d.label));
+    if (real) { cur.id = real.deviceId; cur.label = real.label; }
+  }
+  if (asked || list.length < 2) return cur;                     // Gerät wurde schon im Chrome Dialog gewählt, oder es gibt nur eines
+  const pick = await new Promise(res => {
+    const dlg = $('#devs'), box = $('#devsList'); $('#devsTitle').textContent = title; box.textContent = '';
+    let done = false; const fin = v => { if (done) return; done = true; dlg.close(); res(v); };
+    for (const d of list) { const b = el('button', 'seg' + (d.deviceId === cur.id ? ' cur' : ''), d.label); b.onclick = () => fin(d); box.appendChild(b); }
+    dlg.onclose = () => fin(null); dlg.showModal();
+  });
+  if (!pick) { first.getTracks().forEach(t => t.stop()); return null; }
+  if (pick.deviceId === cur.id) return cur;
+  try { const st = await md.getUserMedia(wish(pick.deviceId)); first.getTracks().forEach(t => t.stop()); return { stream: st, id: pick.deviceId, label: pick.label }; }
+  catch (e) { first.getTracks().forEach(t => t.stop()); showBanner('Gerät lässt sich nicht öffnen: ' + e.message); return null; }
+}
+const cleanLabel = l => l.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)$/i, '');
+$('#btnCam').onclick = async () => {
+  const d = await openInput('videoinput', 'Videoeingang wählen'); if (!d) return;
+  if (tiles.has('web:' + d.id)) { d.stream.getTracks().forEach(t => t.stop()); return showBanner('Diese Kamera ist schon in der Ansicht.'); }
+  addCamera(new WebcamCamera(d.id, cleanLabel(d.label), d.stream));
+};
+$('#btnAudio').onclick = async () => {
+  const d = await openInput('audioinput', 'Audioeingang wählen'); if (!d) return;
+  ensureAudioTile();
+  if (audio.sources.some(s => s.id === d.id)) { d.stream.getTracks().forEach(t => t.stop()); return showBanner('Dieser Eingang ist schon in der Audio Kachel. Für einen anderen im Chrome Dialog das Gerät wechseln.'); }
+  const src = new AudioSource(d.id, cleanLabel(d.label), d.stream);
+  try { await src.start(); } catch (e) { showBanner('Audioeingang lässt sich nicht öffnen: ' + e.message); return; }
+  audio.sources.push(src); buildStrips();
+};
+
+/* ---------- Audio Kachel ---------- */
+const audio = { el: null, sources: [], recording: false, start: 0, dir: null, hist: [], last: 0, busy: false };
+function ensureAudioTile() {
+  if (audio.el) return;
+  const t = audio.el = el('div', 'tile audio');
+  t.innerHTML = `<canvas class="awave"></canvas>
+    <div class="abody">
+      <div class="adisp"><div><div class="ast"><i></i><span>STBY</span></div><div class="afile">Bereit</div></div><div class="atime">0:00:00</div><div class="ainfo"></div></div>
+      <div class="astrips"></div>
+      <div class="abtn"><button class="arec" title="Audio aufnehmen"><i></i></button>REC</div>
+    </div>
+    <div class="afoot"><button class="seg aadd">+ Eingang</button><button class="seg adir">Zielordner</button><span class="sp"></span><button class="seg aclose">✕</button></div>`;
+  t.querySelector('.arec').onclick = () => audioRec();
+  t.querySelector('.aadd').onclick = () => $('#btnAudio').click();
+  const dirBtn = t.querySelector('.adir');
+  if (!window.showDirectoryPicker) dirBtn.style.display = 'none';
+  dirBtn.onclick = async () => { try { audio.dir = await window.showDirectoryPicker({ mode: 'readwrite' }); dirBtn.textContent = '▸ ' + audio.dir.name; dirBtn.classList.add('cur'); } catch {} };
+  t.querySelector('.aclose').onclick = async () => { if (audio.recording) await audioRec(); audio.sources.forEach(s => s.stop()); audio.sources = []; t.remove(); audio.el = null; layout(); };
+  grid.appendChild(t); layout(); requestAnimationFrame(audioDraw);
+}
+function buildStrips() {
+  const box = audio.el.querySelector('.astrips'); box.textContent = '';
+  for (const s of audio.sources) {
+    const st = el('div', 'strip'), cv = el('canvas'), x = el('button', '', '✕'); s.cv = cv;
+    x.onclick = () => { if (audio.recording) return; s.stop(); audio.sources = audio.sources.filter(o => o !== s); buildStrips(); };
+    st.append(cv, el('small', '', s.label), x); st.title = s.label; box.appendChild(st);
+  }
+  const rates = [...new Set(audio.sources.map(s => (s.rate / 1000) + ' kHz'))].join(' / ');
+  audio.el.querySelector('.ainfo').textContent = audio.sources.length ? 'WAV · 32 BIT FLOAT · ' + rates + ' · ' + audio.sources.length + ' EINGANG' + (audio.sources.length > 1 ? 'E' : '') : '';
+}
+async function audioRec() {
+  if (!audio.el || audio.busy) return; audio.busy = true;
+  const t = audio.el, file = t.querySelector('.afile');
+  try {
+    if (!audio.recording) {
+      if (!audio.sources.length) { file.textContent = 'Zuerst einen Eingang hinzufügen'; return; }
+      const d = new Date(), p = n => String(n).padStart(2, '0'), stamp = String(d.getFullYear()).slice(2) + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+      for (const [i, s] of audio.sources.entries()) {
+        const w = new WavWriter(stamp + '_' + (i + 1) + '_' + s.label.replace(/[^\w\-]+/g, '_').slice(0, 40) + '.wav', s.rate, s.ch, audio.dir);
+        await w.open(); s.pending = w;
+      }
+      for (const s of audio.sources) { s.writer = s.pending; s.pending = null; }     // alle Eingänge im selben Moment scharf schalten
+      audio.recording = true; audio.start = Date.now(); t.classList.add('rec');
+      t.querySelector('.ast span').textContent = 'REC'; file.textContent = audio.sources.length === 1 ? audio.sources[0].writer.name : stamp + ' · ' + audio.sources.length + ' Dateien';
+    } else {
+      const ws = audio.sources.map(s => { const w = s.writer; s.writer = null; return w; }).filter(Boolean);
+      audio.recording = false; t.classList.remove('rec'); t.querySelector('.ast span').textContent = 'STBY';
+      let where = ''; for (const w of ws) where = await w.close();
+      file.textContent = ws.length + (ws.length === 1 ? ' Datei' : ' Dateien') + ' gespeichert (' + where + ')';
+    }
+  } catch (e) { file.textContent = 'Fehler: ' + (e.message || e); diag('Audio', 'Fehler: ' + (e.message || e)); }
+  finally { audio.busy = false; syncRecAll(); }
+}
+const dbPos = v => { const db = 20 * Math.log10(Math.max(v, 1e-6)); return Math.max(0, Math.min(1, (db + 60) / 60)); };
+function audioDraw(now) {
+  if (!audio.el) return;
+  requestAnimationFrame(audioDraw);
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  for (const s of audio.sources) {
+    const cv = s.cv; if (!cv) continue;
+    const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr); if (!w || !h) continue;
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    const g = cv.getContext('2d'), n = s.ch, bw = Math.min(10 * dpr, (w - 22 * dpr) / n - 3 * dpr), x0 = 20 * dpr, top = 4 * dpr, H = h - 8 * dpr, seg = 4 * dpr;
+    g.clearRect(0, 0, w, h); g.font = (9 * dpr) + 'px ui-monospace,Menlo,monospace'; g.fillStyle = '#7d756f'; g.textBaseline = 'middle';
+    for (const [db, tx] of [[0, '0'], [-12, '-12'], [-36, '-36'], [-60, '-60']]) g.fillText(tx, 0, top + H * (1 - (db + 60) / 60));
+    for (let c = 0; c < n; c++) {
+      const x = x0 + c * (bw + 3 * dpr), lv = dbPos(s.peaks[c] || 0); s.hold[c] = Math.max(s.peaks[c] || 0, (s.hold[c] || 0) * .96);
+      for (let y = 0; y < H; y += seg) { const pos = 1 - y / H; g.fillStyle = pos > lv ? 'rgba(255,255,255,.08)' : pos > .9 ? '#ff4a36' : pos > .8 ? '#ec7752' : '#f4f1ed'; g.fillRect(x, top + y, bw, seg - dpr); }
+      g.fillStyle = '#b8d2ee'; g.fillRect(x, top + H * (1 - dbPos(s.hold[c])) - dpr, bw, 2 * dpr);
+      if (now - s.clip < 1500) { g.fillStyle = '#ff4a36'; g.fillRect(x, 0, bw, 3 * dpr); }
+    }
+  }
+  if (now - audio.last > 45) { audio.last = now; let m = 0; for (const s of audio.sources) for (const p of s.peaks) if (p > m) m = p; audio.hist.push(m); if (audio.hist.length > 400) audio.hist.shift(); }
+  const wv = audio.el.querySelector('.awave'), w = Math.round(wv.clientWidth * dpr), h = Math.round(wv.clientHeight * dpr);
+  if (w && h) {
+    if (wv.width !== w || wv.height !== h) { wv.width = w; wv.height = h; }
+    const g = wv.getContext('2d'), step = 3 * dpr, head = w - 28 * dpr; g.clearRect(0, 0, w, h);
+    g.fillStyle = audio.recording ? '#f4f1ed' : '#8d857e';
+    for (let i = audio.hist.length - 1, x = head - step; i >= 0 && x > 0; i--, x -= step) { const a = Math.max(dpr, dbPos(audio.hist[i]) * (h - 12 * dpr)); g.fillRect(x, (h - a) / 2, 1.5 * dpr, a); }
+    g.fillStyle = audio.recording ? '#ff4a36' : '#5a524d'; g.fillRect(head, 3 * dpr, 1.5 * dpr, h - 6 * dpr); g.beginPath(); g.arc(head + .75 * dpr, 4 * dpr, 3 * dpr, 0, 7); g.fill();
+  }
+  audio.el.querySelector('.atime').textContent = audio.recording ? (() => { const s = Math.floor((Date.now() - audio.start) / 1000); return Math.floor(s / 3600) + ':' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); })() : '0:00:00';
+}
+
+$('#btnDemo').onclick = () => addCamera(new DemoCamera(++demoCount));
+$('#btnMenu').onclick = () => $('#menu').showModal();
+$('#mHelp').onclick = () => { $('#menu').close(); $('#help').showModal(); };
+$('#mFull').onclick = () => { $('#menu').close(); try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {}); } catch {} };
+$('#mDiag').onclick = () => {
+  $('#menu').close();
+  const lines = ['Multicam Monitor Diagnose', navigator.userAgent, ''];
+  for (const t of tiles.values()) { const c = t.cam; lines.push('== ' + c.name + ' | REC Weg: ' + (c.recMethod || '-') + ' | Protokoll ' + (c.version ? hex(c.version) : '-'));
+    lines.push('Props: ' + [...c.props.values()].map(p => p.code ? hex(p.code).slice(2) + '=' + p.cur + (p.enabled === 1 ? '' : '!') : '').filter(Boolean).join(' ')); lines.push(''); }
+  $('#diagText').value = lines.concat(DIAG).join('\n'); $('#diag').showModal();
+};
+$('#diagCopy').onclick = () => { const t = $('#diagText'); t.select(); try { navigator.clipboard.writeText(t.value).catch(() => document.execCommand('copy')); } catch { document.execCommand('copy'); } };
+
+let wake = null;
+async function keepAwake() { try { if (!wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } } catch {} }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && tiles.size) keepAwake(); });
+
+if (/^#watch-/.test(location.hash)) { /* Zuschauer: keine Kameras an diesem Gerät */ } else if (navigator.usb) {
+  navigator.usb.getDevices().then(list => list.filter(d => d.vendorId === SONY_VID).forEach(d => addCamera(new SonyCamera(d)))).catch(() => {});
+  navigator.usb.addEventListener('connect', ev => {
+    const d = ev.device; if (d.vendorId !== SONY_VID) return;
+    const key = d.serialNumber || (d.productName || '').trim(), old = tiles.get(key);
+    if (old) { old.cam.dev = d; old.cam.ptp = new PtpUsb(d); old.gone = false; } else addCamera(new SonyCamera(d));
+  });
+  navigator.usb.addEventListener('disconnect', ev => {
+    for (const t of tiles.values()) if (t.cam.dev === ev.device) { t.gone = true; t.cam.ptp.broken = true; t.setMsg('Kamera getrennt.\nWieder einstecken, sie verbindet sich automatisch.'); }
+  });
+} else showBanner('Dieser Browser kann kein WebUSB. Für echte Kameras Chrome oder Edge auf Desktop oder Android verwenden. Die Demo funktioniert überall.');
+/* ============================================================
+   Zuschauermodus: Der Rechner mit den Kameras schickt jede Kachel als Videostream (WebRTC, Vermittlung über PeerJS).
+   Die Zuschauer Seite ist dieselbe Datei, geöffnet mit #watch-<Kennung>.
+   ============================================================ */
+const PEER_LIB = 'https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js', QR_LIB = 'https://unpkg.com/qrcode-generator@2.0.4/dist/qrcode.js';
+const libs = {};
+const loadScript = url => libs[url] || (libs[url] = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = url; sc.onload = res; sc.onerror = () => { delete libs[url]; rej(new Error('Bibliothek nicht ladbar (Internet?)')); }; document.head.appendChild(sc); }));
+const peerOpts = () => store.get('peer', undefined);            // optional eigener Vermittlungsserver {host, port, path, secure}
+const newShareId = () => 'mcm-' + Array.from(crypto.getRandomValues(new Uint8Array(9)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+const share = { peer: null, id: store.get('shareId', null), viewers: new Map(), state: '' };
+
+function shareUrl() {
+  const base = location.protocol === 'file:' ? (store.get('shareBase', '') || '').trim() : location.origin + location.pathname;
+  return base ? base.split('#')[0] + '#watch-' + share.id : '';
+}
+function shareUi() {
+  const url = shareUrl(), qr = $('#shareQr');
+  $('#shareBaseBox').hidden = location.protocol !== 'file:';
+  $('#shareLink').value = url || 'Zuerst die Adresse der App eintragen';
+  $('#shareState').textContent = share.state + (share.peer ? ' · ' + share.viewers.size + ' Zuschauer verbunden' : '');
+  $('#btnShare').classList.toggle('solid', !!share.peer);
+  if (qr.dataset.url === url) return; qr.dataset.url = url; qr.textContent = url ? '' : 'Kein Link';
+  if (url) loadScript(QR_LIB).then(() => { const q = qrcode(0, 'M'); q.addData(url); q.make(); qr.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }).catch(() => { qr.textContent = 'QR Code nicht verfügbar, Link verwenden'; });
+}
+function syncViewer(v) {
+  for (const [key, t] of tiles) if (!v.calls.has(key)) { try { v.calls.set(key, share.peer.call(v.conn.peer, t.getStream(), { metadata: { key } })); } catch (e) { diag('Zuschauer', 'Stream Fehler: ' + e.message); } }
+  for (const [key, call] of v.calls) if (!tiles.has(key)) { try { call.close(); } catch {} v.calls.delete(key); }
+}
+function dropViewer(id) { const v = share.viewers.get(id); if (!v) return; for (const c of v.calls.values()) { try { c.close(); } catch {} } share.viewers.delete(id); shareUi(); }
+async function shareStart() {
+  if (share.peer) return;
+  if (!share.id) { share.id = newShareId(); store.set('shareId', share.id); }
+  share.state = 'Wird gestartet …'; shareUi();
+  try { await loadScript(PEER_LIB); } catch (e) { share.state = e.message; return shareUi(); }
+  const peer = share.peer = new Peer(share.id, peerOpts());
+  peer.on('open', () => { share.state = 'Freigabe aktiv'; shareUi(); diag('Zuschauer', 'Freigabe aktiv ' + share.id); });
+  peer.on('connection', conn => {
+    conn.on('open', () => { const v = { conn, calls: new Map() }; share.viewers.set(conn.peer, v); syncViewer(v); shareUi(); diag('Zuschauer', 'verbunden ' + conn.peer); });
+    conn.on('close', () => dropViewer(conn.peer)); conn.on('error', () => dropViewer(conn.peer));
+  });
+  peer.on('disconnected', () => { share.state = 'Verbindung zur Vermittlung verloren, neuer Versuch …'; shareUi(); setTimeout(() => { if (share.peer === peer && !peer.destroyed) peer.reconnect(); }, 2000); });
+  peer.on('error', e => { diag('Zuschauer', 'Fehler ' + e.type + ': ' + e.message);
+    if (e.type === 'unavailable-id') { shareStop(); share.id = newShareId(); store.set('shareId', share.id); shareStart(); }
+    else if (e.type !== 'peer-unavailable') { share.state = 'Fehler: ' + e.type; shareUi(); } });
+}
+function shareStop() { if (!share.peer) return; for (const id of [...share.viewers.keys()]) dropViewer(id); try { share.peer.destroy(); } catch {} share.peer = null; share.state = 'Freigabe beendet'; shareUi(); }
+setInterval(() => {
+  if (!share.peer) return;
+  const st = { tiles: [...tiles.values()].map(t => t.shareInfo()) };
+  for (const [id, v] of share.viewers) { if (!v.conn.open) { dropViewer(id); continue; } syncViewer(v); try { v.conn.send(st); } catch {} }
+}, 1000);
+$('#btnShare').onclick = () => { $('#shareBase').value = store.get('shareBase', ''); $('#share').showModal(); shareStart(); shareUi(); };
+$('#shareBase').oninput = ev => { store.set('shareBase', ev.target.value); shareUi(); };
+$('#shareStop').onclick = () => shareStop();
+$('#shareNew').onclick = () => { shareStop(); share.id = newShareId(); store.set('shareId', share.id); shareStart(); };
+$('#shareCopy').onclick = () => { const t = $('#shareLink'); t.select(); try { navigator.clipboard.writeText(t.value).catch(() => document.execCommand('copy')); } catch { document.execCommand('copy'); } };
+
+/* ---------- Zuschauer Seite ---------- */
+function startViewer(hostId) {
+  document.body.classList.add('watch');
+  const info = empty.querySelectorAll('p'); info[0].textContent = 'Zuschauer'; const say = t => { info[1].textContent = t; };
+  say('Verbinde …');
+  const vt = new Map(), streams = new Map();      // key -> Kachel, key -> Stream
+  const lay = () => {
+    const n = vt.size; grid.hidden = !n; empty.style.display = n ? 'none' : 'flex'; if (!n) return;
+    const portrait = innerHeight > innerWidth * 1.1; let cols = Math.ceil(Math.sqrt(n)); if (portrait) cols = n <= 3 ? 1 : 2; else if (n === 2) cols = 2;
+    grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  };
+  addEventListener('resize', lay);
+  const attach = key => { const t = vt.get(key), st = streams.get(key); if (t && st && t.video.srcObject !== st) { t.video.srcObject = st; t.video.play().catch(() => {}); } };
+  const render = st => {
+    const keys = new Set(st.tiles.map(x => x.key));
+    for (const [k, t] of vt) if (!keys.has(k)) { t.el.remove(); vt.delete(k); }
+    for (const x of st.tiles) {
+      let t = vt.get(x.key);
+      if (!t) {
+        const e = el('div', 'tile');
+        e.innerHTML = `<div class="view"><video muted playsinline autoplay></video>
+          <div class="chips l"><button class="back glass">‹</button><span class="chip glass name"></span><span class="chip time"></span></div>
+          <div class="chips r"><span class="chip glass fmt"></span><span class="chip glass media"></span><span class="chip glass batt"></span></div>
+          <div class="msg"></div><div class="mini"><div class="vals glass"></div></div></div>`;
+        const q = s => e.querySelector(s);
+        t = { el: e, video: q('video'), name: q('.name'), time: q('.time'), fmt: q('.fmt'), media: q('.media'), batt: q('.batt'), vals: q('.vals'), msg: q('.msg'), sig: '' };
+        e.querySelector('.view').onclick = ev => { if (ev.target.closest('.back')) e.classList.remove('solo'); else if (!e.classList.contains('solo')) { for (const o of vt.values()) o.el.classList.remove('solo'); e.classList.add('solo'); } };
+        grid.appendChild(e); vt.set(x.key, t); attach(x.key);
+      }
+      t.el.classList.toggle('rec', x.rec); t.name.textContent = x.name; t.time.textContent = x.time; t.fmt.textContent = x.fmt; t.media.textContent = x.media; t.batt.textContent = x.batt;
+      t.msg.textContent = x.msg; t.msg.classList.toggle('on', !!x.msg);
+      const sig = JSON.stringify(x.mini);
+      if (sig !== t.sig) { t.sig = sig; t.vals.textContent = ''; for (const [l, v] of x.mini) { const d = el('div'); if (l) d.appendChild(el('span', '', l)); d.append(String(v)); t.vals.appendChild(d); } t.vals.style.display = x.mini.length ? '' : 'none'; }
+    }
+    if (!st.tiles.length) say('Verbunden. Am Rechner ist noch keine Kamera aktiv.');
+    lay();
+  };
+  let peer = null, retry = 0;
+  const again = why => { say(why + ' Neuer Versuch …'); clearTimeout(retry); retry = setTimeout(connect, 3000); };
+  const connect = () => {
+    try { if (peer) peer.destroy(); } catch {}
+    for (const t of vt.values()) t.el.remove(); vt.clear(); streams.clear(); lay();
+    peer = new Peer(undefined, peerOpts());
+    peer.on('open', () => {
+      const conn = peer.connect(hostId, { reliable: true });
+      conn.on('open', () => say('Verbunden, warte auf Bild …'));
+      conn.on('data', render);
+      conn.on('close', () => again('Verbindung zum Rechner beendet.'));
+    });
+    peer.on('call', call => { call.answer(); call.on('stream', s => { streams.set(call.metadata.key, s); attach(call.metadata.key); }); });
+    peer.on('error', e => again(e.type === 'peer-unavailable' ? 'Am Rechner ist die Freigabe nicht aktiv.' : 'Keine Verbindung (' + e.type + ').'));
+  };
+  loadScript(PEER_LIB).then(connect).catch(e => say(e.message));
+  keepAwake(); document.addEventListener('click', keepAwake, { once: true });
+}
+const watchId = (location.hash.match(/^#watch-([\w-]+)$/) || [])[1];
+if (watchId) { showBanner(''); startViewer(watchId); }
+addEventListener('hashchange', () => location.reload());
+layout();
+</script>
+</body>
+</html>
